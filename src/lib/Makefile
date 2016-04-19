@@ -1,10 +1,10 @@
-UNAME_S := $(shell uname -s)
+UNAME := $(shell uname -s)
 
-.PHONY: all clean install midifile wildmidi install-midifile install-wildmidi install-portmidi
+.PHONY: all clean install midifile portmidi wildmidi install-midifile install-wildmidi install-portmidi
 
-all: midifile wildmidi
+all: midifile portmidi wildmidi
 
-install: install-midifile install-wildmidi
+install: install-midifile install-portmidi install-wildmidi
 
 install-midifile: 
 	@echo "Building midiFile"
@@ -13,27 +13,28 @@ install-midifile:
 	@echo "Done building midiFile"
 
 install-portmidi:
-	@echo "Building portmidi"
-	#ifeq ($(UNAME_S),Linux)
-	#	CCFLAGS += -D LINUX
-	#endif
-	#ifeq ($(UNAME_S),Darwin)
-	#	CCFLAGS += -D OSX
-	#endif
-	@echo "Done building portmidi"
 
 install-wildmidi:
 	@echo "Building wildmidi"
-	$(shell cd wildmidi && cmake CMakeLists.txt)
+	cd wildmidi && cmake CMakeLists.txt;
 	$(MAKE) -s -C wildmidi clean
 	$(MAKE) -s -C wildmidi
 	@echo "Done building wildmidi"
 
 midifile:
+	@echo "MIDIFILE"
 	cp midifile/lib/*.a $(lib_dir)
 
 portmidi:
+	@echo "Building portmidi"
+	if [ "Darwin" == "$(UNAME)" ]; then \
+		cp -f portmidi/portmidi_mac/217/lib/libportmidi.dylib $(lib_dir); \
+	else \
+		echo "This is not a Mac! Not setup to link PortMidi with Linux yet, ask Chris"; \
+	fi
+	@echo "Done building portmidi"
 
 wildmidi:
+	@echo "WILDMIDI"
 	cp wildmidi/wildmidi.app/Contents/MacOS/wildmidi $(bin_dir)
 	cp wildmidi/*.dylib $(lib_dir)
