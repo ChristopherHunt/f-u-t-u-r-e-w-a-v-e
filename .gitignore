@@ -26,6 +26,7 @@
 *.exe
 *.out
 *.app
+*.fw #Futurewave files
 
 # Log Files
 *.log

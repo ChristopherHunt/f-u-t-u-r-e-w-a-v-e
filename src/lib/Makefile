@@ -22,19 +22,15 @@ install-wildmidi:
 	@echo "Done building wildmidi"
 
 midifile:
-	@echo "MIDIFILE"
 	cp midifile/lib/*.a $(lib_dir)
 
 portmidi:
-	@echo "Building portmidi"
 	if [ "Darwin" == "$(UNAME)" ]; then \
 		cp -f portmidi/portmidi_mac/217/lib/libportmidi.dylib $(lib_dir); \
 	else \
 		echo "This is not a Mac! Not setup to link PortMidi with Linux yet, ask Chris"; \
 	fi
-	@echo "Done building portmidi"
 
 wildmidi:
-	@echo "WILDMIDI"
 	cp wildmidi/wildmidi.app/Contents/MacOS/wildmidi $(bin_dir)
 	cp wildmidi/*.dylib $(lib_dir)
