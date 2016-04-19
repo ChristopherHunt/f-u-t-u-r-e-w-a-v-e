@@ -13,8 +13,8 @@ MIDI Players
 * [Timidity](http://libtimidity.sourceforge.net/)
 
 * [Wildmidi](https://github.com/Mindwerks/wildmidi/wiki)
-   * [http://www.mindwerks.net/projects/wildmidi](Main Site)
-   * [http://alsa.opensrc.org/WildMidi](Some documentation)
+   * [Main Site](http://www.mindwerks.net/projects/wildmidi)
+   * [Some Documentation](http://alsa.opensrc.org/WildMidi)
 
 * [Juce](https://www.juce.com/doc/tutorial_simple_synth_noise)
 
@@ -22,7 +22,7 @@ MIDI Players
 
 * [Port Audio](http://www.portaudio.com/)
 
-* [Port Media](http://portmedia.sourceforge.net/)
+* [Port Midi](http://portmedia.sourceforge.net/)
 
 MIDI Parsers
 -----------
