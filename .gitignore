@@ -33,9 +33,9 @@
 
 # Third Party Libraries
 src/lib/midifile
+src/lib/portmidi
 src/lib/wildmidi
 
 # Build Libraries
 bin
-lib
 log

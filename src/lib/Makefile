@@ -6,7 +6,7 @@ all: midifile portmidi wildmidi
 
 install: install-midifile install-portmidi install-wildmidi
 
-install-midifile: 
+install-midifile:
 	@echo "Building midiFile"
 	$(MAKE) -s -C midifile clean
 	$(MAKE) -s -C midifile library
@@ -29,6 +29,7 @@ portmidi:
 		cp -f portmidi/portmidi_mac/217/lib/libportmidi.dylib $(lib_dir); \
 	else \
 		echo "This is not a Mac! Not setup to link PortMidi with Linux yet, ask Chris"; \
+    #cp -f portmidi/portmidi_mac/217/Release/libportmidi.so $(lib_dir); \
 	fi
 
 wildmidi:
