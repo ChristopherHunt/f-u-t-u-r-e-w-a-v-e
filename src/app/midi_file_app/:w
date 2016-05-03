@@ -27,7 +27,7 @@ int main(int argc, char **argv) {
     cout << "Ticks per quarter note: " << midifile.getTicksPerQuarterNote() << endl;
     cout << "Is absolute time? : " << midifile.isAbsoluteTicks() << endl;
     cout << "Is delta time? : " << midifile.isDeltaTicks() << endl;
-    int track = 6;
+    int track = 1;
     
     for(int i=0; i < midifile[track].size(); i++)
     {
@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
     }    
     cout << "Timer started" << endl;
 
-    PmError midiError = Pm_OpenOutput(stream, defaultDeviceID, NULL, 256, (PmTimestamp (*)(void *))&Pt_Time, NULL, 100); 
+    PmError midiError = Pm_OpenOutput(stream, defaultDeviceID, NULL, 0, TIME_PROC, NULL, 1); 
 
     if (midiError != 0)
     {
@@ -66,7 +66,6 @@ int main(int argc, char **argv) {
     cerr << "Opened midi device successfully!" << endl;
 
 int time = 0;
-    //for(int i=0; i < midifile[1].size(); i++)
     for(int i=0; i < midifile[1].size(); i++)
     {
         MidiEvent event = (MidiEvent)midifile[track][i];
@@ -83,17 +82,11 @@ int time = 0;
             // Different than any timing stuff in the packet itself
             PmEvent *pmEvent = new PmEvent;
             cout << "Ticks per quarter note: " << dec << midifile.getTicksPerQuarterNote() << endl;
-            cout << "Playing at time: " << midifile.getTimeInSeconds(event.tick) * 1000.0 << endl;
-            pmEvent->timestamp = 1000.0 * midifile.getTimeInSeconds(event.tick);
+            cout << "Playing at time: " << (int)midifile.getTimeInSeconds(event.tick) * 1000 << endl;
+            pmEvent->timestamp = 1000 * (int)midifile.getTimeInSeconds(event.tick);
             pmEvent->message = message;
             
-            PmError sendError = Pm_Write(*stream, pmEvent, 24);
-        }
-        else
-        {
-            PmEvent *pmEvent = new PmEvent;
-            pmEvent->message = Pm_Message(event[0], event[1], event[2]); 
-            Pm_Write(*stream, pmEvent, 1); 
+            PmError sendError = Pm_Write(*stream, pmEvent, 1);
         }
     }
     
