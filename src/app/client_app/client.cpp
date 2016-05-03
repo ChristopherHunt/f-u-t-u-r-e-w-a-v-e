@@ -30,7 +30,7 @@ Client::Client(int num_args, char **arg_list) {
    }
 
    // Initialize the error functions.
-   //sendErr_init(error_percent, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_ON);
+   sendErr_init(error_percent, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_ON);
 
    // Drop into the client state machine.
    ready_go();
@@ -46,8 +46,7 @@ int Client::check_for_response(uint32_t timeout) {
    config_fd_set();
    set_timeval(timeout);
 
-   //int num_fds_available = selectMod(remote_sock + 1, &rdfds, NULL, NULL, &tv);
-   int num_fds_available = select(remote_sock + 1, &rdfds, NULL, NULL, &tv);
+   int num_fds_available = selectMod(remote_sock + 1, &rdfds, NULL, NULL, &tv);
    ASSERT(num_fds_available >= 0);
 
    return num_fds_available;
@@ -151,26 +150,11 @@ void Client::handle_handshake() {
    }
 }
 
-void Client::handle_exit() {
-   fprintf(stderr, "handle_twiddle() not implemented!\n");
-   ASSERT(FALSE);
-}
-
 void Client::handle_init() {
    timeout_count = 0;
 
    // Move onto HANDSHAKE state.
    state = HANDSHAKE;
-}
-
-void Client::handle_play() {
-   fprintf(stderr, "handle_play() not implemented!\n");
-   ASSERT(FALSE);
-}
-
-void Client::handle_twiddle() {
-   fprintf(stderr, "handle_twiddle() not implemented!\n");
-   ASSERT(FALSE);
 }
 
 Packet_Flag Client::parse_handshake_ack() {
@@ -279,3 +263,10 @@ void Client::ready_go() {
       }
    }
 }
+
+/*
+int main(int argc, char **argv) {
+   Client(argc - 1, argv + 1);
+   return 0;
+}
+*/

@@ -1,6 +1,7 @@
 CXXFLAGS := -O3 -Wall -std=c++0x
 
-includes += -I$(base_dir)/src/lib/ -L$(lib_dir)
+#includes += -I$(base_dir)/src/lib/ -L$(lib_dir)
+includes += -I$(base_dir)/src/lib/
 
 to_build := $(app) $(lib) $(test)
 

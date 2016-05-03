@@ -17,19 +17,21 @@ CXXFLAGS += -I$(base_dir)/src/lib/
 
 # Enumeration of all of the library directories to compile for the project
 third_party_libs := src/lib
-#test_lib := src/lib/lib_example
+network_lib := src/lib/network
+client_lib := src/lib/client
 
 # Enumeration of all executables for this project
 midi_file_app := src/app/midi_file_app
+client_app := src/app/client_app
 
 # Enumeration of all tests for this project
 #test_example := src/test/test_example
 
 # List containing all of the user libraries for the project
-libraries := $(third_party_libs)
+libraries := $(third_party_libs) $(network_lib) $(client_lib)
 
 # List containing all of the user applications for the project
-apps := $(midi_file_app)
+apps := $(midi_file_app) $(client_app)
 
 # List containing all of the user tests for the project
 #tests := $(test_example)
