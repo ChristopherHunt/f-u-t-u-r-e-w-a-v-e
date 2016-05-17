@@ -8,18 +8,16 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <string.h>
 
 #define DEBUG
 
 #ifdef DEBUG
 #define DEBUG_MSG(__msg__) \
-    fprintf(stderr, "%d:%s:%s:DEBUG:%s:%d:%s\n", \
+    fprintf(stderr, "%d:%s:%s:DEBUG:%s\n", \
             __LINE__, __FILE__, __func__,\
-            (__msg__), \
-            errno, errno ? strerror(errno) : "errno not useful"\
-          ); \
-    exit(errno ? errno : EXIT_FAILURE);\
-
+            (__msg__)\
+          );
 #else
 #define DEBUG_MSG(__msg__)
 #endif
