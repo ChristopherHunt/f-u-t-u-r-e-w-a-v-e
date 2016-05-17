@@ -12,10 +12,12 @@
 #define STDOUT 1
 #define STDERR 2
 
-#define MAX_BUF_SIZE 32768
+#define MAX_BUF_SIZE 128
 
-enum Packet_Flag { MIDI, ACK, SONG_START, SONG_FIN, HS, HS_GOOD, HS_FAIL,
-   CLOCK_SYNC };
+namespace flags {
+   enum Packet_Flag { MIDI, ACK, SONG_START, SONG_FIN, HS, HS_GOOD, HS_FAIL,
+      CLOCK_SYNC };
+};
 
 #define ASSERT(expression) {\
    if (!(expression)) {\

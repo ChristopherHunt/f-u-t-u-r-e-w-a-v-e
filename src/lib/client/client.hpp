@@ -8,17 +8,19 @@
 #define MAX_TIMEOUTS 5
 #define INPUT_ARG_COUNT 3
 
-enum Client_State { INIT, HANDSHAKE, TWIDDLE, PLAY, EXIT };
+namespace client {
+   enum Client_State { HANDSHAKE, WAIT_FOR_SONG, PLAY, DONE };
+};
 
 class Client {
    private:
       // States of the file transfer state machine.
       Client_State state;           // State of the instrument node.
 
-      sockaddr_in remote;           // Server connection information.
-      int remote_sock;              // Socket for connecting to the server.
-      uint32_t remote_port;         // Port of server.
-      std::string remote_machine;   // Server's IP.
+      sockaddr_in server;           // Server connection information.
+      int server_sock;              // Socket for connecting to the server.
+      uint32_t server_port;         // Port of server.
+      std::string server_machine;   // Server's IP.
 
       double error_percent;         // Percentage of packets to lose or corrupt.
       fd_set rdfds;                 // Set of fds to select on.
@@ -41,24 +43,21 @@ class Client {
       // Frees all resources held by the client for a given song.
       void cleanup();
 
-      // Configures a fresh FD_SET that contains the remote_sock.
+      // Configures a fresh FD_SET that contains the server_sock.
       void config_fd_set();
 
       // Handles the exit message from the server, closing the client. 
-      void handle_exit();
+      void handle_done();
 
       // Handles the setup of the client with the server.
       void handle_handshake();
-
-      // Handles the initialization of the client object.
-      void handle_init();
 
       // Handles the playing of the song's midi events from the server.
       void handle_play();
 
       // Handles the waiting state of the client when it is sitting around for
       // instructions from the server.
-      void handle_twiddle();
+      void handle_wait_for_song();
 
       // Parses a handshake ack, returning its flag.
       Packet_Flag parse_handshake_ack(); 
@@ -101,7 +100,6 @@ class Client {
 
       // Base destructor.
       ~Client();
-
 };
 
 #endif

@@ -39,3 +39,8 @@ src/lib/wildmidi
 # Build Libraries
 bin
 log
+
+# Vim Bullshit
+.*.swp
+*.swp
+*~

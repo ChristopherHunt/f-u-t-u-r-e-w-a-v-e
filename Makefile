@@ -19,19 +19,21 @@ CXXFLAGS += -I$(base_dir)/src/lib/
 third_party_libs := src/lib
 network_lib := src/lib/network
 client_lib := src/lib/client
+server_lib := src/lib/server
 
 # Enumeration of all executables for this project
 midi_file_app := src/app/midi_file_app
 client_app := src/app/client_app
+server_app := src/app/server_app
 
 # Enumeration of all tests for this project
 #test_example := src/test/test_example
 
 # List containing all of the user libraries for the project
-libraries := $(third_party_libs) $(network_lib) $(client_lib)
+libraries := $(third_party_libs) $(network_lib) $(client_lib) $(server_lib)
 
 # List containing all of the user applications for the project
-apps := $(midi_file_app) $(client_app)
+apps := $(midi_file_app) $(client_app) $(server_app)
 
 # List containing all of the user tests for the project
 #tests := $(test_example)
@@ -56,7 +58,7 @@ debug:
 	$(eval LDFLAGS += -g)
 	$(MAKE) build
 
-build: dirs $(libraries) $(apps) $(tests)
+build: clean dirs $(libraries) $(apps) $(tests)
 
 $(apps):
 	$(MAKE) -s -C $@
