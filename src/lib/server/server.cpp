@@ -26,12 +26,22 @@ Server::Server(int num_args, char **arg_list) {
    // Setup main socket for the server to listen for clients on.
    setup_udp_socket();
 
+   // Initialize all variables needed by the server.
+   init();
+
    // Begin servicing clients.
    state = server::WAIT_FOR_INPUT;
    ready_go();
 }
 
 Server::~Server() {
+}
+
+void Server::init() {
+   seq_num = 0;
+   file_fd = 0;
+   next_client_id = 0;
+   memset(temp, '\0', MAX_BUF_SIZE);
 }
 
 void Server::config_fd_set_for_stdin() {
@@ -55,7 +65,6 @@ void Server::config_fd_set_for_client_sockets() {
    // Add client socket fd to the FD list to listen for
    std::unordered_map<int, ClientInfo>::iterator it;
    for (it = id_to_client_info.begin(); it != id_to_client_info.end(); ++it) {
-      std::cout << "adding fd: " << it->second.fd << std::endl;
       FD_SET(it->second.fd, &rdfds);
    }
 }
@@ -198,8 +207,43 @@ void Server::handle_stdin() {
 }
 
 void Server::handle_new_client() {
-   fprintf(stderr, "Server::handle_new_client unimplemented!\n");
-   exit(1);
+   fprintf(stderr, "Server::handle_new_client!\n");
+
+   int result;
+   ClientInfo info;
+
+   // Recv message from client
+   result = recv_buf(server_sock, &info.addr, temp, sizeof(Handshake_Packet));
+   ASSERT(result == sizeof(Handshake_Packet));
+
+   // Treat this message as a handshake
+   Handshake_Packet *hs = (Handshake_Packet *)temp;
+
+   // Parse the handshake packet
+   flag::Packet_Flag flag;
+   flag = (flag::Packet_Flag)hs->header.flag;
+
+   // Make sure the packet flag is a handshake
+   ASSERT(flag == flag::HS);
+
+   // Create a new socket to service this new client
+   info.fd = socket(AF_INET, SOCK_DGRAM, 0);
+
+   // Update the client's sequence number
+   info.seq_num = ++(hs->header.seq_num);
+
+   // Add the new client info to the mapping of client id to client info
+   id_to_client_info[next_client_id++] = info;
+
+   // Build response packet to client
+   memset(temp, '\0', MAX_BUF_SIZE);
+   Packet_Header *ph = (Packet_Header *)temp;
+   ph->seq_num = info.seq_num;
+   ph->flag = flag::HS_GOOD;
+
+   // Send hs ack to client
+   result = send_buf(info.fd, &info.addr, temp, sizeof(Packet_Header));
+   ASSERT(result == sizeof(Packet_Header));
 }
 
 void Server::handle_client_msg() {

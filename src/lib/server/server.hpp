@@ -11,6 +11,7 @@
 typedef struct ClientInfo {
    int fd;
    sockaddr_in addr;
+   uint32_t seq_num;
 } ClientInfo;
 
 namespace server {
@@ -29,14 +30,14 @@ class Server {
       std::string filename;       // Name of the song file to read/play
       uint8_t temp[MAX_BUF_SIZE]; // Temporary buffer to hold a received packet.
 
-      double error_percent;      // The percentage of packets the server drops
+      double error_percent;       // The percentage of packets the server drops
 
-      server::State state;    // Current state of the Server's state machine.
+      int next_client_id;         // The id to be assigned to the next client.
+
+      server::State state;        // Current state of the Server's state machine.
 
       // Mapping of client_id to the client's ClientInfo struct.
       std::unordered_map<int, ClientInfo> id_to_client_info;
-
-      //sockaddr_in remote;     // Remote socket config.
 
       uint32_t seq_num;       // Sequence number for packets.
 
@@ -61,10 +62,6 @@ class Server {
       // constructor.
       void print_usage();
 
-      // Receives a new client's handshake packet and returns that packet to
-      // the caller.
-      std::string recv_handshake();
-
       // Sets the timeval struct tv to have timeout number of seconds.
       void set_timeval(uint32_t timeout);
 
@@ -73,6 +70,9 @@ class Server {
 
       // Returns the number of fds with pending packets to recv.
       int check_for_response(uint32_t timeout);
+
+      // Initialize all variables in the Server object to default values.
+      void init();
 
       // Cleanup after the file transfer.
       void handle_done();
