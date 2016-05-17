@@ -15,3 +15,8 @@ bin_dir := $(base_dir)/bin
 bin_test_dir := $(bin_dir)/test
 endif
 include $(base_dir)/src/app.mk
+
+.PHONY: test
+args := songs/forest-temple.midi
+test: $(app)
+	./$(app) $(args)
