@@ -21,3 +21,12 @@ clean:
 
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(includes) -o $@ -c $<
+
+%.c: %.h
+	touch $@
+
+%.cc: %.h
+	touch $@
+
+%.cpp: %.h
+	touch $@
