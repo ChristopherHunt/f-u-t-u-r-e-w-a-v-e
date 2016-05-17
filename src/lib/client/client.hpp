@@ -15,7 +15,7 @@ namespace client {
 class Client {
    private:
       // States of the file transfer state machine.
-      Client_State state;           // State of the instrument node.
+      client::Client_State state;           // State of the instrument node.
 
       sockaddr_in server;           // Server connection information.
       int server_sock;              // Socket for connecting to the server.
@@ -60,7 +60,7 @@ class Client {
       void handle_wait_for_song();
 
       // Parses a handshake ack, returning its flag.
-      Packet_Flag parse_handshake_ack(); 
+      flag::Packet_Flag parse_handshake_ack(); 
 
       // Parses a list of arguments which correspond to the required
       // configuration options for the client class. If any errors are

@@ -78,12 +78,12 @@ void Client::handle_handshake() {
 
       // Parse the received data.
       switch (parse_handshake_ack()) {
-         case HS_GOOD:
+         case flag::HS_GOOD:
             timeout_count = 0;
             state = client::WAIT_FOR_SONG;
             break;
 
-         case HS_FAIL:
+         case flag::HS_FAIL:
             fprintf(stderr, "Could not handshake with the server!\n");
             state = client::DONE;
             break;
@@ -111,9 +111,9 @@ void Client::handle_wait_for_song() {
    ASSERT(FALSE);
 }
 
-Packet_Flag Client::parse_handshake_ack() {
+flag::Packet_Flag Client::parse_handshake_ack() {
    Handshake_Packet *hs = (Handshake_Packet *)buf;
-   return (Packet_Flag)(hs->header.flag);
+   return (flag::Packet_Flag)(hs->header.flag);
 }
 
 int Client::recv_packet_into_buf(uint32_t packet_size) {
@@ -155,7 +155,7 @@ void Client::send_handshake() {
    // Build the handshake packet
    Handshake_Packet *hs = (Handshake_Packet *)buf;
    hs->header.seq_num = 0;
-   hs->header.flag = flags::HS;
+   hs->header.flag = flag::HS;
 
    // Send the handshake packet to the server.
    uint16_t packet_size = sizeof(Handshake_Packet);

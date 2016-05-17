@@ -14,7 +14,7 @@
 
 #define MAX_BUF_SIZE 128
 
-namespace flags {
+namespace flag {
    enum Packet_Flag { MIDI, ACK, SONG_START, SONG_FIN, HS, HS_GOOD, HS_FAIL,
       CLOCK_SYNC };
 };
