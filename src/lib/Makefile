@@ -1,4 +1,9 @@
-UNAME := $(shell uname -s)
+ifeq ($(OS),Windows_NT)
+echo 'ur on windows go home'
+else
+    UNAME_S := $(shell uname -s)
+endif
+
 
 .PHONY: all clean install midifile portmidi wildmidi install-midifile install-wildmidi install-portmidi
 
@@ -32,5 +37,11 @@ portmidi:
 	fi
 
 wildmidi:
+ifeq ($(UNAME_S),Linux)
+	cp wildmidi/wildmidi $(bin_dir)
+	cp wildmidi/*.so* $(lib_dir)
+endif
+ifeq ($(UNAME_S),Darwin)
 	cp wildmidi/wildmidi.app/Contents/MacOS/wildmidi $(bin_dir)
 	cp wildmidi/*.dylib $(lib_dir)
+endif
