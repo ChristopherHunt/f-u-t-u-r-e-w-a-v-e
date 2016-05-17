@@ -100,10 +100,13 @@ class Server {
       void handle_client_msg();
 
       // Returns true if the specified local file for writing was opened.
-      bool open_target_file();
+      int open_target_file(std::string& target_filename);
 
       // Parses a handshake packet and returns true if it is valid.
       bool parse_handshake();
+      
+      // Parses the midi song to determine if valid
+      bool parse_midi_input();
 
       // Waits 10 seconds for a handshake packet to come in. If one does
       // arrive, the packet is parsed and the state of the file transfer

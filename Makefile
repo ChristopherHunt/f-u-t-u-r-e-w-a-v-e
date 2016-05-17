@@ -58,7 +58,7 @@ debug:
 	$(eval LDFLAGS += -g)
 	$(MAKE) build
 
-build: dirs $(libraries) $(apps) $(tests)
+build: clean dirs $(libraries) $(apps) $(tests)
 
 $(apps):
 	$(MAKE) -s -C $@

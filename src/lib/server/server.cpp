@@ -55,6 +55,7 @@ void Server::config_fd_set_for_client_sockets() {
    // Add client socket fd to the FD list to listen for
    std::unordered_map<int, ClientInfo>::iterator it;
    for (it = id_to_client_info.begin(); it != id_to_client_info.end(); ++it) {
+      std::cout << "adding fd: " << it->second.fd << std::endl;
       FD_SET(it->second.fd, &rdfds);
    }
 }
@@ -138,22 +139,46 @@ void Server::print_usage() {
 
 void Server::handle_wait_for_input() {
    int num_connections_available;
+   //fprintf(stderr, "handle_wait_for_input!\n");
 
    // Select on stdin to see if the user wants to do something
    config_fd_set_for_stdin();
    num_connections_available = new_connection_ready();
+   ASSERT(num_connections_available >= 0);
+   if (num_connections_available) {
+      fprintf(stderr, "stdin!\n");
       handle_stdin();
+   }
 
    // Select on the server socket to see if any other clients are trying to chat
    // with us:
    config_fd_set_for_server_socket();
    num_connections_available = new_connection_ready();
+   ASSERT(num_connections_available >= 0);
+   if (num_connections_available) {
+      fprintf(stderr, "new client!\n");
       handle_new_client();
+   }
 
    // Select on the client sockets to see if they are saying anything
    config_fd_set_for_client_sockets();
    num_connections_available = new_connection_ready();
+   ASSERT(num_connections_available >= 0);
+   if (num_connections_available) {
+      fprintf(stderr, "client msg!\n");
       handle_client_msg();
+   }
+}
+
+// TODO: Make this actually parse the song, right now it is just failing open so
+// we can continue to test the remainder of the system.
+bool Server::parse_midi_input(){
+   fprintf(stderr, "Server:parse_midi_input unimplemented!\n");
+   // if successful parse of midi song
+   // state = server::PLAY_SONG
+   // else 
+   // state = server::WAIT_FOR_INPUT
+   return true;
 }
 
 void Server::handle_stdin() {
@@ -165,10 +190,16 @@ void Server::handle_stdin() {
    std::string token;
    iss >> token;
 
+   // For now, just assign the token to the filename
+   filename.assign(token);
    std::cout << "filename: " << token << std::endl;
+
+   state = server::PARSE_SONG;
 }
 
 void Server::handle_new_client() {
+   fprintf(stderr, "Server::handle_new_client unimplemented!\n");
+   exit(1);
 }
 
 void Server::handle_client_msg() {
@@ -177,37 +208,76 @@ void Server::handle_client_msg() {
 }
 
 void Server::handle_parse_song() {
-}
+   fprintf(stderr, "Server::handle_parse_song!\n");
+   bool song_good;
+
+   // Open the file to play
+   file_fd = open_target_file(filename);
+   if (file_fd < 0) {
+      fprintf(stderr, "Midi song no good!\n");
+      state = server::WAIT_FOR_INPUT;
+   }
+   // If the file was opened successfully.
+   else {
+      // Parse the midi file
+      song_good = parse_midi_input();
+      
+      // If the song is good, move to the play_song state
+      if (song_good) {
+         state = server::PLAY_SONG;
+      }
+      else {
+         fprintf(stderr, "Midi song no good!\n");
+         state = server::WAIT_FOR_INPUT;
+      }
+   }
+} 
 
 void Server::handle_play_song() {
+   fprintf(stderr, "Server::handle_play_song!\n");
+
+   // Send each client a song_start packet
+   // Get their ack
+   exit(1);
 }
 
 void Server::handle_song_fin() {
+   fprintf(stderr, "Server::handle_song_fin unimplemented!\n");
+   exit(1);
 }
 
 void Server::handle_abort() {
+   fprintf(stderr, "Server::handle_abort unimplemented!\n");
+   exit(1);
 }
 
 void Server::handle_done() {
+   fprintf(stderr, "Server::handle_done unimplemented!\n");
+   exit(1);
 }
 
 void Server::handle_handshake() {
+   fprintf(stderr, "Server::handle_handshake unimplemented!\n");
+   exit(1);
 }
 
-bool Server::open_target_file() {
+int Server::open_target_file(std::string& target_filename) {
    // Sync the filesystem to get accurate state.
    sync();
 
    // Check if the file exists.
-   file_fd = open(filename.c_str(), O_CREAT | O_TRUNC | O_WRONLY, 400);
-   return (file_fd >= 0) ? true : false;
+   return open(target_filename.c_str(), O_RDONLY, 400);
 }
 
 bool Server::parse_handshake() {
+   fprintf(stderr, "Server::parse_handshake unimplemented!\n");
+   exit(1);
    return true;
 }
 
 void Server::wait_for_handshake() {
+   fprintf(stderr, "Server::wait_for_handshake unimplemented!\n");
+   exit(1);
 }
 
 void Server::ready_go() {

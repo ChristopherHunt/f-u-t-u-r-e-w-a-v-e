@@ -68,54 +68,10 @@ void Client::config_fd_set() {
    FD_SET(remote_sock, &rdfds);
 }
 
-// TODO
-/*
-void Client::handle_play() {
-   // If there is a response from the server.
-   while (check_for_response(0)) {
-      // Receive the next packet in the queue.
-      recv_flag_packet();
-
-      // Parse the packet as a flag packet.
-      std::pair<Packet_Flag, uint32_t> tuple = parse_flag_packet();
-
-      // Pull out the flag and the reference sequence number.
-      Packet_Flag packet_flag = tuple.first;
-      uint32_t rr_number = tuple.second;
-
-      switch (packet_flag) {
-         case RR:
-            // Check for extraneous packets.
-            if (rr_number > bottom_edge) {
-               // Update the window based on the packet's RR number.
-               update_window_bookkeeping(rr_number);
-               state = WINDOW_OPEN;
-            }
-            break;
-
-         case SREJ:
-            send_buffered_packet(rr_number);
-            break;
-
-         case CORRUPT:
-            break;
-
-         default:
-            break;
-      }
-   }
-
-   if (lower_edge == upper_edge) {
-      timeout_count = 0;
-      state = WINDOW_CLOSED;
-   }
-   else {
-      state = WINDOW_OPEN;
-   }
-}
-*/
-
 void Client::handle_handshake() {
+   fprintf(stderr, "Client::handle_handshake() not implemented!\n");
+   ASSERT(FALSE);
+   /*
    // Setup main socket for the client to connect to the server on.
    setup_udp_socket();
 
@@ -149,6 +105,7 @@ void Client::handle_handshake() {
             break;
       }
    }
+   */
 }
 
 void Client::handle_exit() {
