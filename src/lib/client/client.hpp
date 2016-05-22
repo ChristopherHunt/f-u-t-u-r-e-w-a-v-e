@@ -9,7 +9,7 @@
 #define INPUT_ARG_COUNT 3
 
 namespace client {
-   enum Client_State { HANDSHAKE, WAIT_FOR_SONG, PLAY, DONE };
+   enum Client_State { HANDSHAKE, TWIDDLE, PLAY, DONE };
 };
 
 class Client {
@@ -57,7 +57,7 @@ class Client {
 
       // Handles the waiting state of the client when it is sitting around for
       // instructions from the server.
-      void handle_wait_for_song();
+      void twiddle();
 
       // Parses a handshake ack, returning its flag.
       flag::Packet_Flag parse_handshake_ack(); 
@@ -81,6 +81,10 @@ class Client {
 
       // Assemble and send the handshake packet to the server.
       void send_handshake();
+
+      // Sends the ack to the server so that the server knows the client is
+      // ready to go!
+      void send_handshake_fin();
 
       // Recv's the contents of a UDP message into the client's message buffer
       // for futher processing by other functions, requiring that packet_size

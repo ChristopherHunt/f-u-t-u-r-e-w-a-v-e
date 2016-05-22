@@ -10,11 +10,15 @@
 #include <vector>
 #include "network/network.hpp"
 
+#define NUM_SYNC_TRIALS 3     // Number of times to sync with a client to
+                              // established an avg. delay profile.
+
 typedef struct ClientInfo {
    int fd;
    sockaddr_in addr;
    uint32_t seq_num;
    long avg_delay;
+   long last_msg_send_time;
    std::vector<long> delay_times;
 } ClientInfo;
 
@@ -42,8 +46,8 @@ class Server {
       server::State state;        // Current state of the Server's state machine.
       std::deque<ClientInfo> priority_messages; // deque of ClientInfo with high priority
 
-      // Mapping of client_id to the client's ClientInfo struct.
-      std::unordered_map<int, ClientInfo> id_to_client_info;
+      // Mapping of client socket fd to the client's ClientInfo struct.
+      std::unordered_map<int, ClientInfo> fd_to_client_info;
 
       uint32_t seq_num;       // Sequence number for packets.
 
@@ -60,7 +64,7 @@ class Server {
       void config_fd_set_for_normal_traffic();
 
       // Configures the fd_set for priority traffic
-      void config_fd_set_for_priorty_traffic();
+      void config_fd_set_for_priority_traffic();
 
       // Checks to see if there are any available connections.
       int new_connection_ready();
@@ -100,6 +104,10 @@ class Server {
 
       void handle_abort();
 
+      void handle_client_packet(int fd);
+
+      void handle_client_timing(ClientInfo& info);
+
       // Handle input from the user on stdin
       void handle_stdin();
 
@@ -111,6 +119,11 @@ class Server {
 
       // Handle a priority message from the client
       void handle_priority_msg();
+
+      // Sends a sync packet to the client specified by the ClientInfo struct,
+      // incrementing its seq_num count and setting the last_msg_send_time field
+      // to the current time.
+      void send_sync_packet(ClientInfo& info);
 
       // Returns true if the specified local file for writing was opened.
       int open_target_file(std::string& target_filename);
@@ -128,6 +141,10 @@ class Server {
 
       // The main state machine loop for the server.
       void ready_go();
+
+      // Prints the state of the server's priority_message deque and the
+      // fd_to_client_info map.
+      void print_state();
 
    public:
       // Base constructor, takes in a list of arguments and their count to be

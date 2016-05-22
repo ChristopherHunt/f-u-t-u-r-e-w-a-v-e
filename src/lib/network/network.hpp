@@ -1,9 +1,10 @@
 #ifndef __NETWORK__HEADER__H__
 #define __NETWORK__HEADER__H__
 
-#include <stdint.h>
-#include <string>
 #include <netdb.h>   // sockaddr_in
+#include <stdint.h>
+#include <ctime>
+#include <string>
 
 #define FALSE 0
 #define TRUE 1
@@ -16,7 +17,7 @@
 
 namespace flag {
    enum Packet_Flag { MIDI, ACK, SONG_START, SONG_FIN, HS, HS_GOOD, HS_FAIL,
-      CLOCK_SYNC };
+      HS_FIN, SYNC, SYNC_ACK };
 };
 
 #define ASSERT(expression) {\
@@ -54,5 +55,7 @@ typedef struct Handeshake_Packet {
 int send_buf(int sock, sockaddr_in *remote, uint8_t *buf, uint32_t buf_len);
 
 int recv_buf(int sock, sockaddr_in *remote, uint8_t *buf, uint32_t buf_len);
+
+void get_current_time(long *result);
 
 #endif

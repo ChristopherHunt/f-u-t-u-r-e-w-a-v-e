@@ -80,7 +80,8 @@ void Client::handle_handshake() {
       switch (parse_handshake_ack()) {
          case flag::HS_GOOD:
             timeout_count = 0;
-            state = client::WAIT_FOR_SONG;
+            send_handshake_fin();
+            state = client::TWIDDLE;
             break;
 
          case flag::HS_FAIL:
@@ -97,8 +98,8 @@ void Client::handle_handshake() {
 }
 
 void Client::handle_done() {
-   fprintf(stderr, "handle_done() not implemented!\n");
-   ASSERT(FALSE);
+   fprintf(stderr, "No server found, exiting!\n");
+   exit(1);
 }
 
 void Client::handle_play() {
@@ -106,8 +107,15 @@ void Client::handle_play() {
    ASSERT(FALSE);
 }
 
-void Client::handle_wait_for_song() {
-   fprintf(stderr, "handle_wait_for_song() not implemented!\n");
+void Client::twiddle() {
+   // wait on packet
+      // if receive packet, pull it down and put it into temp
+   // switch on the packet flag
+      // if midi flag
+         // pull out the payload and pass it to the play_midi() function
+      // if exit flag
+         // exit cleanly
+   fprintf(stderr, "twiddle() not implemented!\n");
    ASSERT(FALSE);
 }
 
@@ -162,6 +170,22 @@ void Client::send_handshake() {
    send_buf(server_sock, &server, buf, packet_size);
 }
 
+void Client::send_handshake_fin() {
+   fprintf(stderr, "Client::send_handshake_fin!\n");
+   // Parse the handshake ack to get the seq number.
+   Handshake_Packet *hs = (Handshake_Packet *)buf;
+   seq_num = hs->header.seq_num;
+   ASSERT(seq_num == 1);
+
+   // Build the handshake fin packet
+   hs->header.seq_num = ++seq_num;
+   hs->header.flag = flag::HS_FIN;
+
+   // Send the handshake fin packet to the server.
+   uint16_t packet_size = sizeof(Handshake_Packet);
+   send_buf(server_sock, &server, buf, packet_size);
+}
+
 void Client::set_timeval(uint32_t timeout) {
    tv.tv_sec = timeout;
    tv.tv_usec = 0;
@@ -194,8 +218,8 @@ void Client::ready_go() {
             handle_handshake();
             break;
 
-         case client::WAIT_FOR_SONG:
-            handle_wait_for_song();
+         case client::TWIDDLE:
+            twiddle();
             break;
 
          case client::PLAY:
