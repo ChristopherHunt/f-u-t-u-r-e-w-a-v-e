@@ -1,5 +1,5 @@
-app := midi_file_app.fw
-objs := midi_file_app.o
+app := midi_file_stats.fw
+objs := midi_file_stats.o
 
 app_libs := libmidifile.a
 
@@ -17,6 +17,6 @@ endif
 include $(base_dir)/src/app.mk
 
 .PHONY: test
-args := songs/forest-temple.midi
+args := --file songs/forest-temple.midi
 test: $(app)
 	./$(app) $(args)
