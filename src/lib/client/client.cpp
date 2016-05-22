@@ -80,7 +80,8 @@ void Client::handle_handshake() {
       switch (parse_handshake_ack()) {
          case flag::HS_GOOD:
             timeout_count = 0;
-            state = client::WAIT_FOR_SONG;
+            send_handshake_fin();
+            state = client::TWIDDLE;
             break;
 
          case flag::HS_FAIL:
@@ -97,8 +98,8 @@ void Client::handle_handshake() {
 }
 
 void Client::handle_done() {
-   fprintf(stderr, "handle_done() not implemented!\n");
-   ASSERT(FALSE);
+   fprintf(stderr, "No server found, exiting!\n");
+   exit(1);
 }
 
 void Client::handle_play() {
@@ -106,14 +107,57 @@ void Client::handle_play() {
    ASSERT(FALSE);
 }
 
-void Client::handle_wait_for_song() {
-   fprintf(stderr, "handle_wait_for_song() not implemented!\n");
-   ASSERT(FALSE);
+void Client::twiddle() {
+   // Wait for packet
+   if (check_for_response(0)) {
+      // Recive the packet into the buffer
+      int bytes_recv = recv_buf(server_sock, &server, buf, sizeof(Packet_Header));
+      ASSERT(bytes_recv == sizeof(Packet_Header));
+
+      // Treat this message as a normal message
+      Packet_Header *ph = (Packet_Header*)buf;
+
+      // Parse the packet
+      flag::Packet_Flag flag;
+      flag = (flag::Packet_Flag)ph->flag;
+
+      // This packet has to either be a handshake_fin packet or a sync_ack packet.
+      switch (flag) {
+         case flag::SYNC:
+            handle_sync();
+            break;
+         case flag::MIDI:
+            fprintf(stderr, "Client::midi flag not implemented yet!\n");
+            exit(1);
+            break;
+         default:
+            fprintf(stderr, "Client::twiddle fell through!\n");
+            ASSERT(FALSE);
+            break;
+      }
+   }
 }
 
 flag::Packet_Flag Client::parse_handshake_ack() {
    Handshake_Packet *hs = (Handshake_Packet *)buf;
    return (flag::Packet_Flag)(hs->header.flag);
+}
+
+void Client::handle_sync() {
+   int bytes_sent;
+   fprintf(stderr, "Client::handle_sync!\n");
+   // Parse the handshake ack to get the seq number.
+   Packet_Header *ph = (Packet_Header *)buf;
+   seq_num = ph->seq_num;
+
+   // Build the handshake fin packet
+   ph->seq_num = ++seq_num;
+   ph->flag = flag::SYNC_ACK;
+
+   // Send the handshake fin packet to the server.
+   uint16_t packet_size = sizeof(Packet_Header);
+   bytes_sent = send_buf(server_sock, &server, buf, packet_size);
+   ASSERT(bytes_sent == packet_size);
 }
 
 int Client::recv_packet_into_buf(uint32_t packet_size) {
@@ -152,6 +196,8 @@ void Client::print_usage() {
 }
 
 void Client::send_handshake() {
+   int bytes_sent;
+
    // Build the handshake packet
    Handshake_Packet *hs = (Handshake_Packet *)buf;
    hs->header.seq_num = 0;
@@ -159,7 +205,28 @@ void Client::send_handshake() {
 
    // Send the handshake packet to the server.
    uint16_t packet_size = sizeof(Handshake_Packet);
-   send_buf(server_sock, &server, buf, packet_size);
+   bytes_sent = send_buf(server_sock, &server, buf, packet_size);
+   ASSERT(bytes_sent == packet_size);
+}
+
+void Client::send_handshake_fin() {
+   int bytes_sent;
+
+   fprintf(stderr, "Client::send_handshake_fin!\n");
+   // Parse the handshake ack to get the seq number.
+   Handshake_Packet *hs = (Handshake_Packet *)buf;
+   seq_num = hs->header.seq_num;
+   ASSERT(seq_num == 1);
+
+   // Build the handshake fin packet
+   hs->header.seq_num = ++seq_num;
+   ASSERT(hs->header.seq_num == 2);
+   hs->header.flag = flag::HS_FIN;
+
+   // Send the handshake fin packet to the server.
+   uint16_t packet_size = sizeof(Handshake_Packet);
+   bytes_sent = send_buf(server_sock, &server, buf, packet_size);
+   ASSERT(bytes_sent == packet_size);
 }
 
 void Client::set_timeval(uint32_t timeout) {
@@ -194,8 +261,8 @@ void Client::ready_go() {
             handle_handshake();
             break;
 
-         case client::WAIT_FOR_SONG:
-            handle_wait_for_song();
+         case client::TWIDDLE:
+            twiddle();
             break;
 
          case client::PLAY:
