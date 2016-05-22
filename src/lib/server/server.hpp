@@ -4,14 +4,18 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <deque>
 #include <string>
 #include <unordered_map>
+#include <vector>
 #include "network/network.hpp"
 
 typedef struct ClientInfo {
    int fd;
    sockaddr_in addr;
    uint32_t seq_num;
+   long avg_delay;
+   std::vector<long> delay_times;
 } ClientInfo;
 
 namespace server {
@@ -23,7 +27,8 @@ class Server {
       int server_sock;            // Server's socket fd.
       sockaddr_in local;          // Local socket config.
       uint32_t port;              // The server's port.
-      fd_set rdfds;               // Set of fds to select on.
+      fd_set normal_fds;          // Set of fds to for normal messages.
+      fd_set priority_fds;        // Set of fds for priority messages.
       struct timeval tv;          // Timeval for select.
 
       int file_fd;                // File descriptor to the song file to read/play
@@ -35,13 +40,15 @@ class Server {
       int next_client_id;         // The id to be assigned to the next client.
 
       server::State state;        // Current state of the Server's state machine.
+      std::deque<ClientInfo> priority_messages; // deque of ClientInfo with high priority
 
       // Mapping of client_id to the client's ClientInfo struct.
       std::unordered_map<int, ClientInfo> id_to_client_info;
 
       uint32_t seq_num;       // Sequence number for packets.
 
-
+      // computes delay profile times in the delay times vector
+      void calc_delay(ClientInfo &client);
 
       // Configures the fd_set to contain the stdin.
       void config_fd_set_for_stdin();
@@ -49,8 +56,11 @@ class Server {
       // Configures the fd_set to contain the server_sock.
       void config_fd_set_for_server_socket();
 
-      // Configures the fd_set to contain all client sockets.
-      void config_fd_set_for_client_sockets();
+      // Configures the fd_set to contain all normal traffic.
+      void config_fd_set_for_normal_traffic();
+
+      // Configures the fd_set for priority traffic
+      void config_fd_set_for_priorty_traffic();
 
       // Checks to see if there are any available connections.
       int new_connection_ready();
@@ -96,15 +106,18 @@ class Server {
       // Handle a new client that has connected to the server
       void handle_new_client();
 
-      // Handle a message from the client
-      void handle_client_msg();
+      // Handle a normal message from the client
+      void handle_normal_msg();
+
+      // Handle a priority message from the client
+      void handle_priority_msg();
 
       // Returns true if the specified local file for writing was opened.
       int open_target_file(std::string& target_filename);
 
       // Parses a handshake packet and returns true if it is valid.
       bool parse_handshake();
-      
+
       // Parses the midi song to determine if valid
       bool parse_midi_input();
 

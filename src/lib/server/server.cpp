@@ -44,34 +44,52 @@ void Server::init() {
    memset(temp, '\0', MAX_BUF_SIZE);
 }
 
+void Server::calc_delay(ClientInfo &client){
+  std::vector<long>::iterator it;
+  for (it = client.delay_times.begin(); it != client.delay_times.end(); it++) {
+    client.avg_delay += *it;
+  }
+  client.avg_delay /= client.delay_times.size();
+}
+
 void Server::config_fd_set_for_stdin() {
    // Clear initial fd_set.
-   FD_ZERO(&rdfds);
+   FD_ZERO(&normal_fds);
 
-   FD_SET(STDIN, &rdfds);
+   FD_SET(STDIN, &normal_fds);
 }
 
 void Server::config_fd_set_for_server_socket() {
    // Clear initial fd_set.
-   FD_ZERO(&rdfds);
+   FD_ZERO(&normal_fds);
 
-   FD_SET(server_sock, &rdfds);
+   FD_SET(server_sock, &normal_fds);
 }
 
-void Server::config_fd_set_for_client_sockets() {
+void Server::config_fd_set_for_normal_traffic() {
    // Clear initial fd_set.
-   FD_ZERO(&rdfds);
+   FD_ZERO(&normal_fds);
 
    // Add client socket fd to the FD list to listen for
    std::unordered_map<int, ClientInfo>::iterator it;
    for (it = id_to_client_info.begin(); it != id_to_client_info.end(); ++it) {
-      FD_SET(it->second.fd, &rdfds);
+      FD_SET(it->second.fd, &normal_fds);
    }
+}
+
+void Server::config_fd_set_for_priorty_traffic(){
+  // Clear initial fd_set.
+  FD_ZERO(&priority_fds);
+
+  // Add client socket fd to the FD list to listen for
+  if (priority_messages.size() > 0) {
+    FD_SET(priority_messages.front(), &priority_fds);
+  }
 }
 
 int Server::new_connection_ready() {
    // Just select on the world for now
-   int num_fds_available = select(FD_SETSIZE, &rdfds, NULL, NULL, &tv);
+   int num_fds_available = select(FD_SETSIZE, &normal_fds, NULL, NULL, &tv);
    ASSERT(num_fds_available >= 0);
 
    return num_fds_available;
@@ -124,14 +142,14 @@ bool Server::parse_inputs(int num_args, char **arg_list) {
    if (endptr == arg_list[ERROR_PERCENT] || error_percent < 0 || error_percent > 1) {
       printf("Invalid error percent: '%s'\n", arg_list[ERROR_PERCENT]);
       printf("Error percent must be between 0 and 1 inclusive.\n");
-      return false; 
+      return false;
    }
 
    if (num_args == 2) {
       port = (uint32_t)strtol(arg_list[PORT], &endptr, 10);
       if (endptr == arg_list[PORT]) {
          printf("Invalid port: '%s'\n", arg_list[PORT]);
-         return false; 
+         return false;
       }
    }
    else {
@@ -169,13 +187,22 @@ void Server::handle_wait_for_input() {
       handle_new_client();
    }
 
-   // Select on the client sockets to see if they are saying anything
-   config_fd_set_for_client_sockets();
+   // Select on the priority client sockets to see if they are saying anything
+   config_fd_set_for_priority_traffic();
    num_connections_available = new_connection_ready();
    ASSERT(num_connections_available >= 0);
    if (num_connections_available) {
       fprintf(stderr, "client msg!\n");
-      handle_client_msg();
+      handle_priority_msg();
+   }
+
+   // Select on the normal client sockets to see if they are saying anything
+   config_fd_set_for_normal_traffic();
+   num_connections_available = new_connection_ready();
+   ASSERT(num_connections_available >= 0);
+   if (num_connections_available) {
+      fprintf(stderr, "client msg!\n");
+      handle_normal_msg();
    }
 }
 
@@ -185,7 +212,7 @@ bool Server::parse_midi_input(){
    fprintf(stderr, "Server:parse_midi_input unimplemented!\n");
    // if successful parse of midi song
    // state = server::PLAY_SONG
-   // else 
+   // else
    // state = server::WAIT_FOR_INPUT
    return true;
 }
@@ -233,7 +260,10 @@ void Server::handle_new_client() {
    info.seq_num = ++(hs->header.seq_num);
 
    // Add the new client info to the mapping of client id to client info
-   id_to_client_info[next_client_id++] = info;
+   //id_to_client_info[next_client_id++] = info;
+
+   // Add the new client info to the priority deque
+   priority_messages.push_back(info);
 
    // Build response packet to client
    memset(temp, '\0', MAX_BUF_SIZE);
@@ -246,8 +276,13 @@ void Server::handle_new_client() {
    ASSERT(result == sizeof(Packet_Header));
 }
 
-void Server::handle_client_msg() {
-   fprintf(stderr, "Server::handle_client_msg unimplemented!\n");
+void Server::handle_normal_msg() {
+   fprintf(stderr, "Server::handle_normal_msg unimplemented!\n");
+   exit(1);
+}
+
+void Server::handle_priority_msg() {
+   fprintf(stderr, "Server::handle_priority_msg unimplemented!\n");
    exit(1);
 }
 
@@ -265,7 +300,7 @@ void Server::handle_parse_song() {
    else {
       // Parse the midi file
       song_good = parse_midi_input();
-      
+
       // If the song is good, move to the play_song state
       if (song_good) {
          state = server::PLAY_SONG;
@@ -275,7 +310,7 @@ void Server::handle_parse_song() {
          state = server::WAIT_FOR_INPUT;
       }
    }
-} 
+}
 
 void Server::handle_play_song() {
    fprintf(stderr, "Server::handle_play_song!\n");
