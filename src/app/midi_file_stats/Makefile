@@ -17,6 +17,6 @@ endif
 include $(base_dir)/src/app.mk
 
 .PHONY: test
-args := songs/forest-temple.midi
+args := --file songs/forest-temple.midi
 test: $(app)
 	./$(app) $(args)
