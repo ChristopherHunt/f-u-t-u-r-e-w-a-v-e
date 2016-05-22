@@ -17,6 +17,10 @@ endif
 include $(base_dir)/src/app.mk
 
 .PHONY: test
-args := --file songs/forest-temple.midi
-test: $(app)
-	./$(app) $(args)
+test: mario forest
+mario_args := --file songs/mario_overworld.mid
+mario: $(app)
+	./$(app) $(mario_args)
+forest_args := --file songs/forest-temple.midi
+forest: $(app)
+	./$(app) $(forest_args)
