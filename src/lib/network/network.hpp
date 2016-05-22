@@ -3,7 +3,6 @@
 
 #include <netdb.h>   // sockaddr_in
 #include <stdint.h>
-#include <ctime>
 #include <string>
 
 #define FALSE 0
@@ -56,6 +55,6 @@ int send_buf(int sock, sockaddr_in *remote, uint8_t *buf, uint32_t buf_len);
 
 int recv_buf(int sock, sockaddr_in *remote, uint8_t *buf, uint32_t buf_len);
 
-void get_current_time(long *result);
+void get_current_time(long *milliseconds);
 
 #endif

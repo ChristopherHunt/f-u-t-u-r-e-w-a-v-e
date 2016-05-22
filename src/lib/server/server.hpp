@@ -37,7 +37,7 @@ class Server {
 
       int file_fd;                // File descriptor to the song file to read/play
       std::string filename;       // Name of the song file to read/play
-      uint8_t temp[MAX_BUF_SIZE]; // Temporary buffer to hold a received packet.
+      uint8_t buf[MAX_BUF_SIZE]; // Temporary buffer to hold a received packet.
 
       double error_percent;       // The percentage of packets the server drops
 
@@ -48,8 +48,6 @@ class Server {
 
       // Mapping of client socket fd to the client's ClientInfo struct.
       std::unordered_map<int, ClientInfo> fd_to_client_info;
-
-      uint32_t seq_num;       // Sequence number for packets.
 
       // computes delay profile times in the delay times vector
       void calc_delay(ClientInfo &client);
@@ -67,7 +65,7 @@ class Server {
       void config_fd_set_for_priority_traffic();
 
       // Checks to see if there are any available connections.
-      int new_connection_ready();
+      int new_connection_ready(fd_set fds);
 
       // Parses command line arguments
       bool parse_inputs(int num_args, char **arg_list);

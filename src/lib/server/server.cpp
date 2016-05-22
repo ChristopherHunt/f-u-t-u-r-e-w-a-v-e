@@ -38,13 +38,12 @@ Server::~Server() {
 }
 
 void Server::init() {
-   seq_num = 0;
    file_fd = 0;
    next_client_id = 0;
-   memset(temp, '\0', MAX_BUF_SIZE);
+   memset(buf, '\0', MAX_BUF_SIZE);
 }
 
-void Server::calc_delay(ClientInfo &client){
+void Server::calc_delay(ClientInfo& client){
    std::vector<long>::iterator it;
    for (it = client.delay_times.begin(); it != client.delay_times.end(); it++) {
       client.avg_delay += *it;
@@ -87,9 +86,9 @@ void Server::config_fd_set_for_priority_traffic() {
    }
 }
 
-int Server::new_connection_ready() {
+int Server::new_connection_ready(fd_set fds) {
    // Just select on the world for now
-   int num_fds_available = select(FD_SETSIZE, &normal_fds, NULL, NULL, &tv);
+   int num_fds_available = select(FD_SETSIZE, &fds, NULL, NULL, &tv);
    ASSERT(num_fds_available >= 0);
 
    return num_fds_available;
@@ -169,7 +168,7 @@ void Server::handle_wait_for_input() {
 
    // Select on stdin to see if the user wants to do something
    config_fd_set_for_stdin();
-   num_connections_available = new_connection_ready();
+   num_connections_available = new_connection_ready(normal_fds);
    ASSERT(num_connections_available >= 0);
    if (num_connections_available) {
       fprintf(stderr, "stdin!\n");
@@ -179,7 +178,7 @@ void Server::handle_wait_for_input() {
    // Select on the server socket to see if any other clients are trying to chat
    // with us:
    config_fd_set_for_server_socket();
-   num_connections_available = new_connection_ready();
+   num_connections_available = new_connection_ready(normal_fds);
    ASSERT(num_connections_available >= 0);
    if (num_connections_available) {
       fprintf(stderr, "new client!\n");
@@ -188,7 +187,7 @@ void Server::handle_wait_for_input() {
 
    // Select on the priority client sockets to see if they are saying anything
    config_fd_set_for_priority_traffic();
-   num_connections_available = new_connection_ready();
+   num_connections_available = new_connection_ready(priority_fds);
    ASSERT(num_connections_available >= 0);
    if (num_connections_available) {
       fprintf(stderr, "priority msg!\n");
@@ -197,7 +196,7 @@ void Server::handle_wait_for_input() {
 
    // Select on the normal client sockets to see if they are saying anything
    config_fd_set_for_normal_traffic();
-   num_connections_available = new_connection_ready();
+   num_connections_available = new_connection_ready(normal_fds);
    ASSERT(num_connections_available >= 0);
    if (num_connections_available) {
       fprintf(stderr, "normal msg!\n");
@@ -239,11 +238,11 @@ void Server::handle_new_client() {
    ClientInfo info;
 
    // Recv message from client
-   result = recv_buf(server_sock, &info.addr, temp, sizeof(Handshake_Packet));
+   result = recv_buf(server_sock, &info.addr, buf, sizeof(Handshake_Packet));
    ASSERT(result == sizeof(Handshake_Packet));
 
    // Treat this message as a handshake
-   Handshake_Packet *hs = (Handshake_Packet *)temp;
+   Handshake_Packet *hs = (Handshake_Packet *)buf;
 
    // Parse the handshake packet
    flag::Packet_Flag flag;
@@ -280,13 +279,13 @@ void Server::handle_new_client() {
    priority_messages.push_back(info);
 
    // Build response packet to client
-   memset(temp, '\0', MAX_BUF_SIZE);
-   Packet_Header *ph = (Packet_Header *)temp;
+   memset(buf, '\0', MAX_BUF_SIZE);
+   Packet_Header *ph = (Packet_Header *)buf;
    ph->seq_num = info.seq_num;
    ph->flag = flag::HS_GOOD;
 
    // Send hs ack to client
-   result = send_buf(info.fd, &info.addr, temp, sizeof(Packet_Header));
+   result = send_buf(info.fd, &info.addr, buf, sizeof(Packet_Header));
    ASSERT(result == sizeof(Packet_Header));
 
    print_state();
@@ -304,14 +303,14 @@ void Server::handle_normal_msg() {
 void Server::handle_priority_msg() {
    fprintf(stderr, "Server::handle_priority_msg!\n");
    int result;
-   ClientInfo info;
-   info = priority_messages.front();
+   ClientInfo *info;
+   info = &(priority_messages.front());
 
-   result = recv_buf(info.fd, &info.addr, temp, sizeof(Packet_Header));
+   result = recv_buf(info->fd, &info->addr, buf, sizeof(Packet_Header));
    ASSERT(result == sizeof(Packet_Header));
 
    // Treat this message as a normal message
-   Packet_Header *ph = (Packet_Header*)temp;
+   Packet_Header *ph = (Packet_Header*)buf;
 
    // Parse the packet
    flag::Packet_Flag flag;
@@ -320,10 +319,12 @@ void Server::handle_priority_msg() {
    // This packet has to either be a handshake_fin packet or a sync_ack packet.
    switch (flag) {
       case flag::HS_FIN:
-         handle_client_timing(info);
+         fprintf(stderr, "Recv'd handshake_fin!\n");
+         send_sync_packet(*info);
          break;
       case flag::SYNC_ACK:
-         handle_client_timing(info);
+         fprintf(stderr, "Recv'd sync_ack!\n");
+         handle_client_timing(*info);
          break;
       default:
          fprintf(stderr, "handle_priority_message fell through!\n");
@@ -353,6 +354,7 @@ void Server::handle_client_timing(ClientInfo& info) {
    // If we have recv'd enough client sync messages to establish an avg. delay
    // for this client.
    if (info.delay_times.size() >= NUM_SYNC_TRIALS) {
+      fprintf(stderr, "Done syncing with client %d\n", info.fd);
       // Compute the average delay for this client
       calc_delay(info);
 
@@ -375,13 +377,19 @@ void Server::send_sync_packet(ClientInfo& info) {
    int result;
 
    // Build sync packet to send to the client
-   memset(temp, '\0', MAX_BUF_SIZE);
-   Packet_Header *ph = (Packet_Header *)temp;
-   ph->seq_num = info.seq_num++;
+   memset(buf, '\0', MAX_BUF_SIZE);
+   Packet_Header *ph = (Packet_Header *)buf;
+
+   // Get the client message's seq_num
+   info.seq_num = ph->seq_num;
+   fprintf(stderr, "the client sent seq_num: %d\n", ph->seq_num);
+
+   // Rebuild the packet to the client
+   ph->seq_num = ++info.seq_num;
    ph->flag = flag::SYNC;
 
    // Send sync packet to client
-   result = send_buf(info.fd, &info.addr, temp, sizeof(Packet_Header));
+   result = send_buf(info.fd, &info.addr, buf, sizeof(Packet_Header));
    ASSERT(result == sizeof(Packet_Header));
 
    // Set the send time in the ClientInfo struct
@@ -504,16 +512,16 @@ void Server::print_state() {
       fprintf(stderr, "\t\tseq_num:   %d\n", info.seq_num);
       fprintf(stderr, "\t\tavg_delay: %lu\n", info.avg_delay);
       fprintf(stderr, "\t\tlast_send: %lu\n", info.last_msg_send_time);
-      fprintf(stderr, "\t\tdelay_times.size(): %d\n", info.delay_times.size());
+      fprintf(stderr, "\t\tdelay_times.size(): %lu\n", info.delay_times.size());
       fprintf(stderr, "\n");
    }
    fprintf(stderr, "\tfd_to_client_info:\n");
-   for (int i = 0; i < fd_to_client_info.size(); ++i) {
-      info = fd_to_client_info[i];
-      fprintf(stderr, "\t\tfd:        %d\n", info.fd);
-      fprintf(stderr, "\t\tseq_num:   %d\n", info.seq_num);
-      fprintf(stderr, "\t\tavg_delay: %lu\n", info.avg_delay);
-      fprintf(stderr, "\t\tlast_send: %lu\n", info.last_msg_send_time);
+   std::unordered_map<int, ClientInfo>::iterator it;
+   for (it = fd_to_client_info.begin(); it != fd_to_client_info.end(); ++it) {
+      fprintf(stderr, "\t\tfd:        %d\n", it->second.fd);
+      fprintf(stderr, "\t\tseq_num:   %d\n", it->second.seq_num);
+      fprintf(stderr, "\t\tavg_delay: %lu\n", it->second.avg_delay);
+      fprintf(stderr, "\t\tlast_send: %lu\n", it->second.last_msg_send_time);
       fprintf(stderr, "\n");
    }
 }

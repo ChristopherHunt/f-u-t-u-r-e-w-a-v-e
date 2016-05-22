@@ -55,6 +55,9 @@ class Client {
       // Handles the playing of the song's midi events from the server.
       void handle_play();
 
+      // Handles sync messages between the client and the server.
+      void handle_sync();
+
       // Handles the waiting state of the client when it is sitting around for
       // instructions from the server.
       void twiddle();
