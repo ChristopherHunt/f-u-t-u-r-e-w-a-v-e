@@ -83,6 +83,48 @@ int write_event_information(ostream& out, MidiEvent event) {
     return EXIT_SUCCESS;
 }
 
+#define UNIB 0xF0
+#define LNIB 0x0F
+int write_event_info(ostream& out, MidiEvent event) {
+    char command_byte = event.getCommandByte();
+    int duration = event.getDurationInSeconds();
+    int size = event.getSize();
+    cout << "---------------" << endl;
+    if (event.isNoteOn()) {
+        out << "TYPE    : Note On" << endl;
+    }
+    if (event.isNoteOff()) {
+        out << "TYPE    : Note Off" << endl;
+    }
+    if (event.isAftertouch()) {
+        out << "TYPE    : Aftertouch" << endl;
+    }
+    if (event.isController()) {
+        out << "TYPE    : Controller" << endl;
+    }
+    if (event.isMeta()) {
+        out << "TYPE    : Meta" << endl;
+    }
+    if (event.isPitchbend()) {
+        out << "TYPE    : Pitchbend" << endl;
+    }
+    if (event.isPressure()) {
+        out << "TYPE    : Pressure" << endl;
+    }
+    if (event.isTempo()) {
+        out << "TYPE    : Tempo" << endl;
+    }
+    if (event.isTimbre()) {
+        out << "TYPE    : Timbre" << endl;
+    }
+    out << "SIZE    : " << size << endl;
+    out << "DURATION: " << duration << endl;
+    out << "WHOLE   : 0x" << std::uppercase << std::hex << ((UNIB | LNIB) & command_byte) << endl;
+    out << "COMMAND : 0x" << std::uppercase << std::hex << (UNIB & command_byte) << endl;
+    out << "NOTE    : 0x" << std::uppercase << std::hex << (LNIB & command_byte) << endl;
+    cout << "---------------" << endl;
+}
+
 int write_event_stats(ostream& out, MidiFile midifile) {
     MidiEvent event;
     for (int i = 0; i < midifile.getTrackCount(); i++) {
@@ -98,11 +140,12 @@ int write_event_stats(ostream& out, MidiFile midifile) {
         double duration_min = DBL_MAX;
         MidiEvent event_duration_min;
         MidiEvent event_duration_max;
+        midifile[i].linkNotePairs();
         for (int j = 0; j < midifile[i].getSize(); j++) {
-            midifile[i].linkNotePairs();
             int this_size = midifile[i][j].getSize();
             int this_duration = midifile[i][j].getDurationInSeconds();
-            //char this_command = midifile[i][j].getCommand();
+            cout << "\tTIME IN SECONDS: " << midifile.getTimeInSeconds(i,j) << endl;
+            write_event_info(cout, midifile[i][j]);
             if  (this_size > size_max) {
                 size_max = this_size;
                 event_size_max = midifile[i][j];
