@@ -30,10 +30,10 @@ server_app := src/app/server_app
 #test_example := src/test/test_example
 
 # List containing all of the user libraries for the project
-libraries := $(third_party_libs) $(network_lib) $(client_lib) $(server_lib)
+libraries := $(network_lib) $(client_lib) $(server_lib) $(third_party_libs)
 
 # List containing all of the user applications for the project
-apps := $(midi_file_app) $(client_app) $(server_app)
+apps := $(client_app) $(server_app) $(midi_file_app) 
 
 # List containing all of the user tests for the project
 #tests := $(test_example)
