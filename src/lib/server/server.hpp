@@ -24,6 +24,7 @@ typedef struct ClientInfo {
    long avg_delay;
    long last_msg_send_time;
    std::vector<long> delay_times;
+   std::vector<int> tracks;
 } ClientInfo;
 
 typedef uint8_t MyPmMessage[3];

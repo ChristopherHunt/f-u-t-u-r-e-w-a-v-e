@@ -173,6 +173,8 @@ void Server::print_usage() {
 
 
 void Server::handle_wait_for_input() {
+   fprintf(stderr, "handle_wait_for_input!\n");
+   fprintf(stderr, "song_is_playing: %d\n", song_is_playing);
    int num_connections_available;
 
    // Select on stdin to see if the user wants to do something
@@ -273,12 +275,16 @@ bool Server::parse_midi_input(){
                event, temp->timestamp);
       }
 
+      // Give this track a handle to reference it later by
+      track_queues[track] = track_deque;
+
       // Reset to front of collection if you hit the end
       if (client_it == fd_to_client_info.end()) {
          client_it = fd_to_client_info.begin();
       }
-      // Assign this track's queue to the next client in round robin fashion
-      track_queues[client_it->first] = track_deque;
+
+      // Assign this track's handle to the next client in round robin fashion
+      client_it->second.tracks.push_back(track);
 
       // Increment the client iterator to the next client in the collection
       ++client_it;
@@ -518,43 +524,57 @@ void Server::handle_play_song() {
    MyPmEvent event;
    MyPmMessage message;
    ClientInfo *client;
+   std::deque<MyPmEvent> *track_deque;
 
-   std::unordered_map<int, std::deque<MyPmEvent> >::iterator it;
-   // Loop through all of the queues
-   for (it = track_queues.begin(); it != track_queues.end(); ++it) {
-      if (it->second.size()) {
-         song_is_playing = true;
+   std::unordered_map<int, ClientInfo>::iterator client_it;
+   std::vector<int>::iterator track_it;
 
-         // Get the next event
-         event = it->second.front();
+   // Loop through all of the clients
+   for (client_it = fd_to_client_info.begin(); client_it != fd_to_client_info.end();
+      ++client_it) {
 
-         // Setup the buffer to send a midi message if its time to send.
-         if (event.timestamp <= midi_timer) {
-            client = &(fd_to_client_info[it->first]);
-            setup_midi_msg(client); 
+      // Loop through all of the tracks that this client is assigned
+      for (track_it = client_it->second.tracks.begin();
+           track_it != client_it->second.tracks.end(); ++track_it) {
 
-            // If any of the queues have events that need to be sent
+         // Get the deque that corresponds to the track
+         track_deque = &(track_queues[*track_it]);
+
+         if (track_deque->size()) {
+            song_is_playing = true;
+
+            // Get the next event
+            event = track_deque->front();
+
+            // Setup the buffer to send a midi message if its time to send.
             std::cout << "\tMidi Timer: " << midi_timer << std::endl; 
-            while (it->second.size() && event.timestamp <= midi_timer) {
-               // Pull the midi message out of the PmEvent
-               memcpy(message, event.message, 3 * sizeof(uint8_t));
-               std::cout << '\t' << std::hex;
-               std::cout << "Message: " << message << std::endl << std::dec;
-               std::cout << "\tMessage Timestamp: " << event.timestamp << std::endl;
-               std::cout << "\tMidi Timer: " << midi_timer << std::endl; 
+            if (event.timestamp <= midi_timer) {
+               // Get the current client
+               client = &(client_it->second);
+               setup_midi_msg(client); 
 
-               // Add this event to the buffered midi message
-               event.serialize(buf, buf_offset);
+               // If any of the queues have events that need to be sent
+               while (track_deque->size() && event.timestamp <= midi_timer) {
+                  // Pull the midi message out of the PmEvent
+                  memcpy(message, event.message, 3 * sizeof(uint8_t));
+                  std::cout << '\t' << std::hex;
+                  std::cout << "Message: " << message << std::endl << std::dec;
+                  std::cout << "\tMessage Timestamp: " << event.timestamp << std::endl;
+                  std::cout << "\tMidi Timer: " << midi_timer << std::endl; 
 
-               // Remove the first event from the queue
-               it->second.pop_front();
+                  // Add this event to the buffered midi message
+                  event.serialize(buf, buf_offset);
 
-               // Get a reference to the new front event of the queue.
-               event = it->second.front();
+                  // Remove the first event from the queue
+                  track_deque->pop_front();
+
+                  // Get a reference to the new front event of the queue.
+                  event = track_deque->front();
+               }
+
+               // Send the midi message to the client
+               send_midi_msg(client);
             }
-
-            // Send the midi message to the client
-            send_midi_msg(client);
          }
       }
    }
