@@ -9,9 +9,13 @@
 #include <unordered_map>
 #include <vector>
 #include "network/network.hpp"
+#include "midifile/include/MidiFile.h"
+//#include "midifile/include/Options.h"
+#include "portmidi/include/portmidi.h"
+#include "portmidi/include/porttime.h"
 
 #define NUM_SYNC_TRIALS 3     // Number of times to sync with a client to
-                              // established an avg. delay profile.
+// established an avg. delay profile.
 
 typedef struct ClientInfo {
    int fd;
@@ -22,9 +26,27 @@ typedef struct ClientInfo {
    std::vector<long> delay_times;
 } ClientInfo;
 
+typedef uint8_t MyPmMessage[3];
+
+typedef struct MyPmEvent {
+   MyPmMessage message;
+   uint32_t timestamp;
+
+   MyPmEvent() {};
+
+   MyPmEvent(const MyPmEvent& other) {
+      message[0] = other.message[0];
+      message[1] = other.message[1];
+      message[2] = other.message[2];
+      timestamp = other.timestamp;
+   }
+} MyPmEvent;
+
 namespace server {
    enum State { HANDSHAKE, WAIT_FOR_INPUT, PARSE_SONG, PLAY_SONG, SONG_FIN, DONE };
 };
+
+void process_midi(PtTimestamp timestamp, void *userData);
 
 class Server {
    private:
@@ -37,7 +59,7 @@ class Server {
 
       int file_fd;                // File descriptor to the song file to read/play
       std::string filename;       // Name of the song file to read/play
-      uint8_t buf[MAX_BUF_SIZE]; // Temporary buffer to hold a received packet.
+      uint8_t buf[MAX_BUF_SIZE];  // Temporary buffer to hold a received packet.
 
       double error_percent;       // The percentage of packets the server drops
 
@@ -45,6 +67,12 @@ class Server {
 
       server::State state;        // Current state of the Server's state machine.
       std::deque<ClientInfo> priority_messages; // deque of ClientInfo with high priority
+
+      MidiFile midifile;          // Midifile object to parse midi data
+      std::vector<std::pair<int, std::deque<MyPmEvent> > > track_queues; // Vector of events to play and their client to play them
+      PtError time_error;         // Time error
+
+      bool song_is_playing;       // Flag to tell the state machine we are playing a song.
 
       // Mapping of client socket fd to the client's ClientInfo struct.
       std::unordered_map<int, ClientInfo> fd_to_client_info;
@@ -145,6 +173,8 @@ class Server {
       void print_state();
 
    public:
+      PtTimestamp midi_timer;     // Midi timer (int32_t)
+
       // Base constructor, takes in a list of arguments and their count to be
       // parsed and used for the filetransfer.
       Server(int num_args, char **arg_list);

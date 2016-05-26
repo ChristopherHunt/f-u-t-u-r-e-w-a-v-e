@@ -23,6 +23,9 @@ Server::Server(int num_args, char **arg_list) {
       exit(1);
    }
 
+   // No song is playing at startup.
+   song_is_playing = false;
+
    // Setup main socket for the server to listen for clients on.
    setup_udp_socket();
 
@@ -111,7 +114,7 @@ void Server::setup_udp_socket() {
    local.sin_port = htons(port);                // Set server's port
 
    int result = 0;
-   result = bind(server_sock, (struct sockaddr *)&local, sizeof(sockaddr_in));
+   result = ::bind(server_sock, (struct sockaddr *)&local, sizeof(sockaddr_in));
 
    // Check if port was already taken by another process on this box.
    if (result < 0) {
@@ -204,16 +207,82 @@ void Server::handle_wait_for_input() {
       fprintf(stderr, "normal msg!\n");
       handle_normal_msg();
    }
+
+   if (song_is_playing) {
+      state = server::PLAY_SONG;
+   }
 }
 
 // TODO: Make this actually parse the song, right now it is just failing open so
 // we can continue to test the remainder of the system.
 bool Server::parse_midi_input(){
-   fprintf(stderr, "Server:parse_midi_input unimplemented!\n");
-   // if successful parse of midi song
-   // state = server::PLAY_SONG
-   // else
-   // state = server::WAIT_FOR_INPUT
+   fprintf(stderr, "Server:parse_midi_input!\n");
+
+   midifile.read(filename.c_str());
+
+   // If the midifile is no good, return to previous state.
+   if (!midifile.status()) {
+      fprintf(stderr, "Error reading midifile %s!\n", filename.c_str());
+      return false;
+   }
+
+   if (fd_to_client_info.size() == 0) {
+      fprintf(stderr, "No clients connected, connect clients to the server "
+         "before trying to play a song.\n");
+      return false;
+   }
+
+   int num_tracks = midifile.getTrackCount();
+
+   MidiEvent midi_event;
+   PmMessage midi_message;
+   MyPmEvent pmEvent;
+
+   std::unordered_map<int, ClientInfo>::iterator client_it;
+   client_it = fd_to_client_info.begin();
+
+   // Break down the midi file by track and queue up its events.
+   for (int track = 0; track < num_tracks; ++track) {
+      std::deque<MyPmEvent> track_deque;
+
+      int track_size = midifile[track].size();
+      // Looping through the track, adding events to its queue
+      for (int event = 0; event < track_size; ++event) {
+         // Make a midi_event so we can extract the midi bytes
+         midi_event = (MidiEvent)midifile[track][event];
+
+         // Making a port midi message based off of the bytes from the
+         // midi_event
+         pmEvent.message[0] = midi_event[0];
+         pmEvent.message[1] = midi_event[1];
+         pmEvent.message[2] = midi_event[2];
+
+         // Making a port midi event which can be sent to port midi to be played
+         // This is a wrapper around the event that just carries the timestamp
+         // to play the event at.
+         pmEvent.timestamp = midifile.getTimeInSeconds(midi_event.tick) * 1000.0;
+         fprintf(stderr, "track: %d -- event: %d -- timestamp %d\n", track,
+            event, pmEvent.timestamp);
+
+         // Push the pmEvent onto the deque
+         track_deque.push_back(pmEvent);
+            
+         MyPmEvent *temp = &(track_deque.back());
+         fprintf(stderr, "temp track: %d -- event: %d -- timestamp %d\n", track,
+            event, temp->timestamp);
+      }
+
+      // Reset to front of collection if you hit the end
+      if (client_it == fd_to_client_info.end()) {
+         client_it = fd_to_client_info.begin();
+      }
+      // Assign this track's queue to the next client in round robin fashion
+      track_queues.push_back(std::make_pair(track, track_deque));
+
+      // Increment the client iterator to the next client in the collection
+      ++client_it;
+   }
+
    return true;
 }
 
@@ -425,6 +494,14 @@ void Server::handle_parse_song() {
       // If the song is good, move to the play_song state
       if (song_good) {
          state = server::PLAY_SONG;
+
+         // Set the flag so we know a song is playing in the WAIT_FOR_INPUT
+         // state.
+         song_is_playing = true;
+
+         // Start the timer with 1 millisecond resolution and creates a thread to call
+         // the process_midi function every 1 millisecond.
+         time_error = Pt_Start(1, &process_midi, (void *)this); 
       }
       else {
          fprintf(stderr, "Midi song no good!\n");
@@ -436,9 +513,51 @@ void Server::handle_parse_song() {
 void Server::handle_play_song() {
    fprintf(stderr, "Server::handle_play_song!\n");
 
-   // Send each client a song_start packet
-   // Get their ack
-   exit(1);
+   song_is_playing = false;
+   MyPmEvent event;
+   MyPmMessage message;
+
+   std::vector<std::pair<int, std::deque<MyPmEvent> > >::iterator it;
+   // Loop through all of the queues
+   for (it = track_queues.begin(); it != track_queues.end(); ++it) {
+      if (it->second.size() > 0) {
+         song_is_playing = true;
+
+         // If any of the queues have events that need to be sent
+         event = it->second.front();
+         std::cout << "\tMidi Timer: " << midi_timer << std::endl; 
+         while (it->second.size() && event.timestamp <= midi_timer) {
+            // Pull the midi message out of the PmEvent
+            memcpy(message, event.message, 3 * sizeof(uint8_t));
+            std::cout << '\t' << std::hex;
+            std::cout << "Message: " << message << std::endl << std::dec;
+            std::cout << "\tMessage Timestamp: " << event.timestamp << std::endl;
+            std::cout << "\tMidi Timer: " << midi_timer << std::endl; 
+
+            // Pack this event into the current message.
+
+            // Remove the first event from the queue
+            it->second.pop_front();
+
+            // Get a reference to the new front event of the queue.
+            event = it->second.front();
+         }
+      }
+      // Dig through the queue to find the number of events that need to be
+      // sent
+      // Serialize and send the events to the client
+
+   }
+
+   // Go back to waiting for input from the clients, and expect that the
+   // process_midi function will be called by the PortMidi thread every 1
+   // millisecond to do the sending of the packets to the clients.
+   state = server::WAIT_FOR_INPUT;
+}
+
+void process_midi(PtTimestamp timestamp, void *userData) {
+   // Lookup the time and populate the server's clock
+   ((Server *)userData)->midi_timer = Pt_Time();
 }
 
 void Server::handle_song_fin() {
