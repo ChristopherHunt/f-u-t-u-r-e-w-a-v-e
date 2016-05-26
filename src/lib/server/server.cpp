@@ -312,6 +312,11 @@ void Server::handle_priority_msg() {
    // Treat this message as a normal message
    Packet_Header *ph = (Packet_Header*)buf;
 
+   // Update the client's info structure with the proper seq_num
+   info->seq_num = ph->seq_num + 1;
+
+   fprintf(stderr, "Server::handle_priority_msg seq_num: %d\n", ph->seq_num);
+
    // Parse the packet
    flag::Packet_Flag flag;
    flag = (flag::Packet_Flag)ph->flag;
@@ -377,16 +382,15 @@ void Server::send_sync_packet(ClientInfo& info) {
    int result;
 
    // Build sync packet to send to the client
-   memset(buf, '\0', MAX_BUF_SIZE);
    Packet_Header *ph = (Packet_Header *)buf;
 
-   // Get the client message's seq_num
-   info.seq_num = ph->seq_num;
    fprintf(stderr, "the client sent seq_num: %d\n", ph->seq_num);
-
    // Rebuild the packet to the client
-   ph->seq_num = ++info.seq_num;
+   memset(buf, '\0', MAX_BUF_SIZE);
+   ph->seq_num = info.seq_num;
    ph->flag = flag::SYNC;
+
+   fprintf(stderr, "responding with seq_num: %d\n", ph->seq_num);
 
    // Send sync packet to client
    result = send_buf(info.fd, &info.addr, buf, sizeof(Packet_Header));

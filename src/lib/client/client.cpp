@@ -3,6 +3,7 @@
 #include <stdio.h>            // printf
 #include <fcntl.h>            // open, O_RDONLY
 #include <iostream>
+#include <string>
 #include <stdlib.h>           // strtol, strtod, exit, calloc, free
 #include <string.h>           // memset, memcpy
 #include <sys/socket.h>       // socket
@@ -150,9 +151,18 @@ void Client::handle_sync() {
    Packet_Header *ph = (Packet_Header *)buf;
    seq_num = ph->seq_num;
 
+   fprintf(stderr, "the server sent seq_num: %d\n", seq_num);
+
    // Build the handshake fin packet
-   ph->seq_num = ++seq_num;
+   ++seq_num;
+   ph->seq_num = seq_num;
    ph->flag = flag::SYNC_ACK;
+
+   fprintf(stderr, "responding with seq_num: %d\n", ph->seq_num);
+
+   std::string meh;
+   std::cin >> meh;
+   std::cout << meh << std::endl;
 
    // Send the handshake fin packet to the server.
    uint16_t packet_size = sizeof(Packet_Header);
@@ -219,7 +229,8 @@ void Client::send_handshake_fin() {
    ASSERT(seq_num == 1);
 
    // Build the handshake fin packet
-   hs->header.seq_num = ++seq_num;
+   ++seq_num;
+   hs->header.seq_num = seq_num;
    ASSERT(hs->header.seq_num == 2);
    hs->header.flag = flag::HS_FIN;
 
