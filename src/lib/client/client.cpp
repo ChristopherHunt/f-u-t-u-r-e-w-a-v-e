@@ -21,6 +21,9 @@ Client::Client(int num_args, char **arg_list) {
    // Set sequence number to 0 since we are just starting.
    seq_num = 0;
 
+   // Initialize the timeout count to zero for connection attempts
+   timeout_count = 0;
+
    // Put object into the HANDSHAKE state.
    state = client::HANDSHAKE;
 
@@ -73,7 +76,7 @@ void Client::handle_handshake() {
    // Send handshake to the server.
    send_handshake();
 
-   if (check_for_response(5)) {
+   if (check_for_response(1)) {
       // Obtain server's response
       recv_packet_into_buf(sizeof(Handshake_Packet));
 
@@ -94,6 +97,15 @@ void Client::handle_handshake() {
             fprintf(stderr, "Fell through client handle_handshake!\n");
             exit(1);
             break;
+      }
+
+      timeout_count = 0;
+   }
+   else  {
+      ++timeout_count;
+      if (timeout_count == MAX_TIMEOUTS) {
+         fprintf(stderr, "Could not connect to server, exiting!\n");
+         exit(1);
       }
    }
 }
@@ -159,10 +171,6 @@ void Client::handle_sync() {
    ph->flag = flag::SYNC_ACK;
 
    fprintf(stderr, "responding with seq_num: %d\n", ph->seq_num);
-
-   std::string meh;
-   std::cin >> meh;
-   std::cout << meh << std::endl;
 
    // Send the handshake fin packet to the server.
    uint16_t packet_size = sizeof(Packet_Header);
