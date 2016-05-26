@@ -87,6 +87,8 @@ void Server::config_fd_set_for_priority_traffic() {
 }
 
 int Server::new_connection_ready(fd_set fds) {
+   set_timeval(0);
+
    // Just select on the world for now
    int num_fds_available = select(FD_SETSIZE, &fds, NULL, NULL, &tv);
    ASSERT(num_fds_available >= 0);
@@ -261,7 +263,7 @@ void Server::handle_new_client() {
          close(it->fd);
 
          // Remove the stale connection from the priority message queue
-         priority_messages.erase(it);       
+         priority_messages.erase(it);
       }
    }
 
@@ -363,8 +365,8 @@ void Server::handle_client_timing(ClientInfo& info) {
       // Compute the average delay for this client
       calc_delay(info);
 
-      // Remove the client from the priority_message_queue. 
-      priority_messages.pop_front(); 
+      // Remove the client from the priority_message_queue.
+      priority_messages.pop_front();
 
       // Clear the delay_times vector for the client
       info.delay_times.clear();
