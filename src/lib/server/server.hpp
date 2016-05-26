@@ -40,6 +40,13 @@ typedef struct MyPmEvent {
       message[2] = other.message[2];
       timestamp = other.timestamp;
    }
+
+   void serialize(uint8_t *buf, uint8_t offset) {
+      buf[offset++] = message[0];
+      buf[offset++] = message[1];
+      buf[offset++] = message[2];
+      memcpy(buf, &timestamp, sizeof(uint32_t));
+   }
 } MyPmEvent;
 
 namespace server {
@@ -59,7 +66,6 @@ class Server {
 
       int file_fd;                // File descriptor to the song file to read/play
       std::string filename;       // Name of the song file to read/play
-      uint8_t buf[MAX_BUF_SIZE];  // Temporary buffer to hold a received packet.
 
       double error_percent;       // The percentage of packets the server drops
 
@@ -69,13 +75,30 @@ class Server {
       std::deque<ClientInfo> priority_messages; // deque of ClientInfo with high priority
 
       MidiFile midifile;          // Midifile object to parse midi data
-      std::vector<std::pair<int, std::deque<MyPmEvent> > > track_queues; // Vector of events to play and their client to play them
+
+      // Vector of events to play and their client to play them
+      std::unordered_map<int, std::deque<MyPmEvent> > track_queues;
+      //std::vector<std::pair<int, std::deque<MyPmEvent> > > track_queues;
       PtError time_error;         // Time error
+
+      uint8_t buf[MAX_BUF_SIZE];  // Temporary buffer to hold a received packet.
+      uint8_t buf_offset;         // Offset to index into the buffer with.
+      Midi_Header *midi_header;   // Header overlaid on buf to investiage midi msgs.
 
       bool song_is_playing;       // Flag to tell the state machine we are playing a song.
 
       // Mapping of client socket fd to the client's ClientInfo struct.
       std::unordered_map<int, ClientInfo> fd_to_client_info;
+
+      // Appends the event to the buffer, incrementing the number of midi
+      // messages in the buffer's midi_header.
+      void append_to_buf(MyPmEvent *event);
+
+      // Sends the content in the buffer to the client at the specified socket.
+      int send_midi_msg(ClientInfo *info);
+
+      // Sets up the buffer as a midi message to the specified client.
+      void setup_midi_msg(ClientInfo *);
 
       // computes delay profile times in the delay times vector
       void calc_delay(ClientInfo &client);

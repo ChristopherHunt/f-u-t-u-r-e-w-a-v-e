@@ -23,6 +23,10 @@ Server::Server(int num_args, char **arg_list) {
       exit(1);
    }
 
+   // Overlay the midi header onto the buf for easy dereferencing later.
+   midi_header = (Midi_Header *)buf;
+   buf_offset = 0;
+
    // No song is playing at startup.
    song_is_playing = false;
 
@@ -213,8 +217,6 @@ void Server::handle_wait_for_input() {
    }
 }
 
-// TODO: Make this actually parse the song, right now it is just failing open so
-// we can continue to test the remainder of the system.
 bool Server::parse_midi_input(){
    fprintf(stderr, "Server:parse_midi_input!\n");
 
@@ -228,14 +230,13 @@ bool Server::parse_midi_input(){
 
    if (fd_to_client_info.size() == 0) {
       fprintf(stderr, "No clients connected, connect clients to the server "
-         "before trying to play a song.\n");
+            "before trying to play a song.\n");
       return false;
    }
 
    int num_tracks = midifile.getTrackCount();
 
    MidiEvent midi_event;
-   PmMessage midi_message;
    MyPmEvent pmEvent;
 
    std::unordered_map<int, ClientInfo>::iterator client_it;
@@ -262,14 +263,14 @@ bool Server::parse_midi_input(){
          // to play the event at.
          pmEvent.timestamp = midifile.getTimeInSeconds(midi_event.tick) * 1000.0;
          fprintf(stderr, "track: %d -- event: %d -- timestamp %d\n", track,
-            event, pmEvent.timestamp);
+               event, pmEvent.timestamp);
 
          // Push the pmEvent onto the deque
          track_deque.push_back(pmEvent);
-            
+
          MyPmEvent *temp = &(track_deque.back());
          fprintf(stderr, "temp track: %d -- event: %d -- timestamp %d\n", track,
-            event, temp->timestamp);
+               event, temp->timestamp);
       }
 
       // Reset to front of collection if you hit the end
@@ -277,7 +278,7 @@ bool Server::parse_midi_input(){
          client_it = fd_to_client_info.begin();
       }
       // Assign this track's queue to the next client in round robin fashion
-      track_queues.push_back(std::make_pair(track, track_deque));
+      track_queues[client_it->first] = track_deque;
 
       // Increment the client iterator to the next client in the collection
       ++client_it;
@@ -516,37 +517,46 @@ void Server::handle_play_song() {
    song_is_playing = false;
    MyPmEvent event;
    MyPmMessage message;
+   ClientInfo *client;
 
-   std::vector<std::pair<int, std::deque<MyPmEvent> > >::iterator it;
+   std::unordered_map<int, std::deque<MyPmEvent> >::iterator it;
    // Loop through all of the queues
    for (it = track_queues.begin(); it != track_queues.end(); ++it) {
-      if (it->second.size() > 0) {
+      if (it->second.size()) {
          song_is_playing = true;
 
-         // If any of the queues have events that need to be sent
+         // Get the next event
          event = it->second.front();
-         std::cout << "\tMidi Timer: " << midi_timer << std::endl; 
-         while (it->second.size() && event.timestamp <= midi_timer) {
-            // Pull the midi message out of the PmEvent
-            memcpy(message, event.message, 3 * sizeof(uint8_t));
-            std::cout << '\t' << std::hex;
-            std::cout << "Message: " << message << std::endl << std::dec;
-            std::cout << "\tMessage Timestamp: " << event.timestamp << std::endl;
+
+         // Setup the buffer to send a midi message if its time to send.
+         if (event.timestamp <= midi_timer) {
+            client = &(fd_to_client_info[it->first]);
+            setup_midi_msg(client); 
+
+            // If any of the queues have events that need to be sent
             std::cout << "\tMidi Timer: " << midi_timer << std::endl; 
+            while (it->second.size() && event.timestamp <= midi_timer) {
+               // Pull the midi message out of the PmEvent
+               memcpy(message, event.message, 3 * sizeof(uint8_t));
+               std::cout << '\t' << std::hex;
+               std::cout << "Message: " << message << std::endl << std::dec;
+               std::cout << "\tMessage Timestamp: " << event.timestamp << std::endl;
+               std::cout << "\tMidi Timer: " << midi_timer << std::endl; 
 
-            // Pack this event into the current message.
+               // Add this event to the buffered midi message
+               event.serialize(buf, buf_offset);
 
-            // Remove the first event from the queue
-            it->second.pop_front();
+               // Remove the first event from the queue
+               it->second.pop_front();
 
-            // Get a reference to the new front event of the queue.
-            event = it->second.front();
+               // Get a reference to the new front event of the queue.
+               event = it->second.front();
+            }
+
+            // Send the midi message to the client
+            send_midi_msg(client);
          }
       }
-      // Dig through the queue to find the number of events that need to be
-      // sent
-      // Serialize and send the events to the client
-
    }
 
    // Go back to waiting for input from the clients, and expect that the
@@ -649,4 +659,27 @@ void Server::print_state() {
       fprintf(stderr, "\t\tlast_send: %lu\n", it->second.last_msg_send_time);
       fprintf(stderr, "\n");
    }
+}
+
+void Server::append_to_buf(MyPmEvent *event) {
+   ASSERT(event != NULL);
+   event->serialize(buf, buf_offset);
+   buf_offset += SIZE_OF_MIDI_EVENT;
+   ++midi_header->num_midi_events;
+}
+
+int Server::send_midi_msg(ClientInfo *info) {
+   ASSERT(info != NULL);
+   fprintf(stderr, "send_midi_msg to client fd %d\n", info->fd);
+   int bytes_sent = send_buf(info->fd, &info->addr, buf, buf_offset);
+   buf_offset = 0;
+   return bytes_sent;
+}
+
+void Server::setup_midi_msg(ClientInfo *info) {
+   ASSERT(info != NULL);
+   midi_header->header.seq_num = ++info->seq_num;
+   midi_header->header.flag = flag::MIDI;
+   midi_header->num_midi_events = 0;
+   buf_offset = sizeof(midi_header);
 }

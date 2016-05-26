@@ -59,14 +59,12 @@ int main(int argc, char **argv) {
     }
 
     // Test out port midi
-    int pmErrInit = Pm_Initialize();
+    Pm_Initialize();
     cout << "Number of midi devices available: " << Pm_CountDevices() << endl;
 
     int defaultDeviceID = Pm_GetDefaultOutputDeviceID();
     cout << "The default output device set by the configuration is : " << defaultDeviceID << endl;
-    const PmDeviceInfo *deviceInfo = Pm_GetDeviceInfo(defaultDeviceID);
     cout << "opening device for writing..." << endl;
-    int32_t bufferSize = 1024;
 
     stream = new PortMidiStream*;
     PtError timeError = Pt_Start(1, &process_midi, NULL); 
