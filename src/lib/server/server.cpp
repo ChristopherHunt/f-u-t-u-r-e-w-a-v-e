@@ -173,8 +173,8 @@ void Server::print_usage() {
 
 
 void Server::handle_wait_for_input() {
-   fprintf(stderr, "handle_wait_for_input!\n");
-   fprintf(stderr, "song_is_playing: %d\n", song_is_playing);
+   //fprintf(stderr, "handle_wait_for_input!\n");
+   //fprintf(stderr, "song_is_playing: %d\n", song_is_playing);
    int num_connections_available;
 
    // Select on stdin to see if the user wants to do something
