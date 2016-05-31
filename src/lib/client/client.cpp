@@ -27,6 +27,9 @@ Client::Client(int num_args, char **arg_list) {
    // Put object into the HANDSHAKE state.
    state = client::HANDSHAKE;
 
+   // Have the midi_header overlay the buf.
+   midi_header = (Packet_Header *)buf;
+
    // Ensure that command line arguments are good.
    if (!parse_inputs(num_args, arg_list)) {
       print_usage();
@@ -69,6 +72,11 @@ void Client::config_fd_set() {
    FD_SET(server_sock, &rdfds);
 }
 
+void process_midi(PtTimestamp timestamp, void *userData) {
+   // Lookup the time and populate the server's clock
+   ((Client *)userData)->midi_timer = Pt_Time();
+}
+
 void Client::handle_handshake() {
    // Setup main socket for the client to connect to the server on.
    setup_udp_socket();
@@ -83,6 +91,20 @@ void Client::handle_handshake() {
       // Parse the received data.
       switch (parse_handshake_ack()) {
          case flag::HS_GOOD:
+            // Start the midi timer
+            Pm_Initialize();
+            fprintf(stderr, "Initialized!\n");
+            Pt_Start(1, &process_midi, (void *)this); 
+            fprintf(stderr, "timer started!\n");
+
+            // Get the default midi device
+            default_device_id = Pm_GetDefaultOutputDeviceID();
+            fprintf(stderr, "default_device_id: %d\n", default_device_id);
+
+            // Setup the output stream for playing midi.
+            Pm_OpenOutput(&stream, default_device_id, NULL, 1, NULL, NULL, 0);
+            fprintf(stderr, "Opened stream!\n");
+
             timeout_count = 0;
             send_handshake_fin();
             state = client::TWIDDLE;
@@ -140,14 +162,59 @@ void Client::twiddle() {
             handle_sync();
             break;
          case flag::MIDI:
-            fprintf(stderr, "Client::midi flag not implemented yet!\n");
-            exit(1);
+            handle_midi_data();
             break;
          default:
             fprintf(stderr, "Client::twiddle fell through!\n");
+            fprintf(stderr, "packet flag: %d\n", flag);
             ASSERT(FALSE);
             break;
       }
+   }
+}
+
+void Client::handle_midi_data() {
+   fprintf(stderr, "Client::handle_midi_data!\n");
+
+   // Receive the remainder of the midi song data.
+   int buf_offset = sizeof(Packet_Header);
+   int total_bytes_recv = 0;
+   int bytes_recv;
+   uint8_t num_midi_events = midi_header->num_midi_events;
+   int total_bytes_to_recv = num_midi_events * SIZEOF_MIDI_EVENT;
+   fprintf(stderr, "client::handle_midi_data num_midi_events: %d\n", num_midi_events);
+   fprintf(stderr, "client::handle_midi_data expecting: %d bytes\n", num_midi_events * SIZEOF_MIDI_EVENT);
+
+   while (total_bytes_recv != total_bytes_to_recv) {
+      bytes_recv = recv_buf(server_sock, &server, buf + buf_offset,
+            total_bytes_to_recv - total_bytes_recv);
+      if (bytes_recv >= 0) {
+         total_bytes_recv += bytes_recv;
+         buf_offset = bytes_recv;
+      }
+      fprintf(stderr, "client::handle_midi_data recevied: %d total bytes\n", total_bytes_recv);
+   }
+   ASSERT(total_bytes_recv == total_bytes_to_recv);
+
+   // Loop through all midi events
+   for (uint8_t i = 0; i < num_midi_events; ++i) {
+      // Pull out each midi message from the buffer 
+      my_event = (MyPmEvent *)(buf + buf_offset);
+
+      // Make a message object to wrap this midi message
+      message = Pm_Message(my_event->message[0], my_event->message[1],
+            my_event->message[2]); 
+
+      // Wrap the message and its timestamp in a midi event 
+      event.message = message;
+      event.timestamp = my_event->timestamp;
+
+      fprintf(stderr, "\t\tSending event %d to the midi device!\n", i);
+      // Send this midi event to output
+      Pm_Write(stream, &event, 1);
+
+      // Move offset to next midi message
+      buf_offset += SIZEOF_MIDI_EVENT;
    }
 }
 
@@ -157,8 +224,8 @@ flag::Packet_Flag Client::parse_handshake_ack() {
 }
 
 void Client::handle_sync() {
-   int bytes_sent;
    fprintf(stderr, "Client::handle_sync!\n");
+   int bytes_sent;
    // Parse the handshake ack to get the seq number.
    Packet_Header *ph = (Packet_Header *)buf;
    seq_num = ph->seq_num;

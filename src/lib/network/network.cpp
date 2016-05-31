@@ -17,8 +17,10 @@ int send_buf(int sock, sockaddr_in *remote, uint8_t *buf, uint32_t buf_len) {
 int recv_buf(int sock, sockaddr_in *remote, uint8_t *buf, uint32_t buf_len) {
    fprintf(stderr, "Receiving from fd: %d\n", sock);
    socklen_t sockaddr_in_len = sizeof(sockaddr_in);
-   return recvfrom(sock, buf, buf_len, 0, (struct sockaddr*)remote,
+   uint32_t result = recvfrom(sock, buf, buf_len, 0, (struct sockaddr*)remote,
          &sockaddr_in_len); 
+   fprintf(stderr, "Received %d bytes!\n", result);
+   return result;
 } 
 
 void get_current_time(long *milliseconds) {

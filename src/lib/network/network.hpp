@@ -12,13 +12,8 @@
 #define STDOUT 1
 #define STDERR 2
 
-#define SIZE_OF_MIDI_EVENT (3 * sizeof(uint8_t) + sizeof(uint32_t))
+#define SIZEOF_MIDI_EVENT (3 * sizeof(uint8_t) + sizeof(uint32_t))
 #define MAX_BUF_SIZE 2048
-
-namespace flag {
-   enum Packet_Flag { MIDI, ACK, SONG_START, SONG_FIN, HS, HS_GOOD, HS_FAIL,
-      HS_FIN, SYNC, SYNC_ACK };
-};
 
 #define ASSERT(expression) {\
    if (!(expression)) {\
@@ -38,15 +33,43 @@ namespace flag {
    }\
 }
 
+namespace flag {
+   enum Packet_Flag { BLANK, MIDI, ACK, SONG_START, SONG_FIN, HS, HS_GOOD, HS_FAIL,
+      HS_FIN, SYNC, SYNC_ACK };
+};
+
+typedef uint8_t MyPmMessage[3];
+
+typedef struct MyPmEvent {
+   MyPmMessage message;
+   uint32_t timestamp;
+
+   MyPmEvent() {};
+
+   MyPmEvent(const MyPmEvent& other) {
+      message[0] = other.message[0];
+      message[1] = other.message[1];
+      message[2] = other.message[2];
+      timestamp = other.timestamp;
+   }
+
+   void serialize(uint8_t *buf, uint64_t offset) {
+      buf[offset++] = message[0];
+      fprintf(stderr, "serialize: buf[%d]: %d\n", offset - 1, buf[offset - 1]);
+      buf[offset++] = message[1];
+      fprintf(stderr, "serialize: buf[%d]: %d\n", offset - 1, buf[offset - 1]);
+      buf[offset++] = message[2];
+      fprintf(stderr, "serialize: buf[%d]: %d\n", offset - 1, buf[offset - 1]);
+      memcpy(buf + offset, &timestamp, sizeof(uint32_t));
+      fprintf(stderr, "serialize: buf[%d]: %d\n", offset, buf[offset]);
+   }
+} MyPmEvent;
+
 typedef struct Packet_Header {
    uint32_t seq_num;
    uint8_t flag;
-} __attribute__((packed)) Packet_Header;
-
-typedef struct Midi_Header {
-   Packet_Header header;
    uint8_t num_midi_events;
-} __attribute__((packed)) Midi_Header;
+} __attribute__((packed)) Packet_Header;
 
 typedef struct Handeshake_Packet {
    Packet_Header header;

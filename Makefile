@@ -68,13 +68,13 @@ debug:
 build: clean dirs $(libraries) $(apps) $(tests)
 
 $(apps):
-	$(MAKE) -C $@
+	$(MAKE) -s -C $@
 
 $(libraries):
 	$(MAKE) -s -C $@
 
 $(tests):
-	$(MAKE) -C $@
+	$(MAKE) -s -C $@
 
 run:
 	#cd bin && ./buffer_app

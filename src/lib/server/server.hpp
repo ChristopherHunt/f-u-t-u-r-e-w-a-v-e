@@ -28,29 +28,6 @@ typedef struct ClientInfo {
    std::vector<int> tracks;
 } ClientInfo;
 
-typedef uint8_t MyPmMessage[3];
-
-typedef struct MyPmEvent {
-   MyPmMessage message;
-   uint32_t timestamp;
-
-   MyPmEvent() {};
-
-   MyPmEvent(const MyPmEvent& other) {
-      message[0] = other.message[0];
-      message[1] = other.message[1];
-      message[2] = other.message[2];
-      timestamp = other.timestamp;
-   }
-
-   void serialize(uint8_t *buf, uint8_t offset) {
-      buf[offset++] = message[0];
-      buf[offset++] = message[1];
-      buf[offset++] = message[2];
-      memcpy(buf, &timestamp, sizeof(uint32_t));
-   }
-} MyPmEvent;
-
 namespace server {
    enum State { HANDSHAKE, WAIT_FOR_INPUT, PARSE_SONG, PLAY_SONG, SONG_FIN, DONE };
 };
@@ -84,8 +61,8 @@ class Server {
       PtError time_error;         // Time error
 
       uint8_t buf[MAX_BUF_SIZE];  // Temporary buffer to hold a received packet.
-      uint8_t buf_offset;         // Offset to index into the buffer with.
-      Midi_Header *midi_header;   // Header overlaid on buf to investiage midi msgs.
+      uint64_t buf_offset;        // Offset to index into the buffer with.
+      Packet_Header *midi_header; // Header overlaid on buf to investiage midi msgs.
 
       bool song_is_playing;       // Flag to tell the state machine we are playing a song.
 

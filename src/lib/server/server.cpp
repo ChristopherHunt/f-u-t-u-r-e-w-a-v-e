@@ -24,7 +24,7 @@ Server::Server(int num_args, char **arg_list) {
    }
 
    // Overlay the midi header onto the buf for easy dereferencing later.
-   midi_header = (Midi_Header *)buf;
+   midi_header = (Packet_Header *)buf;
    buf_offset = 0;
 
    // No song is playing at startup.
@@ -563,7 +563,7 @@ void Server::handle_play_song() {
                   std::cout << "\tMidi Timer: " << midi_timer << std::endl; 
 
                   // Add this event to the buffered midi message
-                  event.serialize(buf, buf_offset);
+                  append_to_buf(&event);
 
                   // Remove the first event from the queue
                   track_deque->pop_front();
@@ -682,14 +682,24 @@ void Server::print_state() {
 }
 
 void Server::append_to_buf(MyPmEvent *event) {
+   fprintf(stderr, "append_to_buf!\n");
    ASSERT(event != NULL);
+   fprintf(stderr, "buf_offset: %d\n", buf_offset);
+   ASSERT(midi_header->flag == flag::MIDI);
    event->serialize(buf, buf_offset);
-   buf_offset += SIZE_OF_MIDI_EVENT;
+   buf_offset += SIZEOF_MIDI_EVENT;
    ++midi_header->num_midi_events;
+   fprintf(stderr, "SIZEOF_MIDI_EVENT: %d\n", SIZEOF_MIDI_EVENT);
+   fprintf(stderr, "midi_header->seq_num: %d\n", midi_header->seq_num);
+   fprintf(stderr, "midi_header->flag: %d\n", midi_header->flag);
+   fprintf(stderr, "midi_header->num_midi_events: %d\n", midi_header->num_midi_events);
 }
 
 int Server::send_midi_msg(ClientInfo *info) {
+   fprintf(stderr, "send_midi_msg!\n");
    ASSERT(info != NULL);
+   fprintf(stderr, "buf_offset: %d\n", buf_offset);
+   ASSERT(midi_header->flag == flag::MIDI);
    fprintf(stderr, "send_midi_msg to client fd %d\n", info->fd);
    int bytes_sent = send_buf(info->fd, &info->addr, buf, buf_offset);
    buf_offset = 0;
@@ -697,9 +707,11 @@ int Server::send_midi_msg(ClientInfo *info) {
 }
 
 void Server::setup_midi_msg(ClientInfo *info) {
+   fprintf(stderr, "setup_midi_msg!\n");
    ASSERT(info != NULL);
-   midi_header->header.seq_num = ++info->seq_num;
-   midi_header->header.flag = flag::MIDI;
+   midi_header->seq_num = ++info->seq_num;
+   midi_header->flag = flag::MIDI;
    midi_header->num_midi_events = 0;
-   buf_offset = sizeof(midi_header);
+   buf_offset = sizeof(Packet_Header);
+   fprintf(stderr, "buf_offset: %d\n", buf_offset);
 }

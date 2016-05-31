@@ -5,6 +5,8 @@
 #include <string>
 #include "network/network.hpp"
 #include <sys/time.h>
+#include "portmidi/include/portmidi.h"
+#include "portmidi/include/porttime.h"
 
 #define MAX_TIMEOUTS 5
 #define INPUT_ARG_COUNT 3
@@ -13,10 +15,12 @@ namespace client {
    enum Client_State { HANDSHAKE, TWIDDLE, PLAY, DONE };
 };
 
+void process_midi(PtTimestamp timestamp, void *userData);
+
 class Client {
    private:
       // States of the file transfer state machine.
-      client::Client_State state;           // State of the instrument node.
+      client::Client_State state;   // State of the instrument node.
 
       sockaddr_in server;           // Server connection information.
       int server_sock;              // Socket for connecting to the server.
@@ -33,6 +37,13 @@ class Client {
 
       int seq_num;                  // The current packet sequence number.
       uint32_t max_packet_num;      // Max packet sequence number expected.
+
+      PortMidiStream *stream;       // Pointer to the port midi output stream.
+      int default_device_id;        // Default device id for this midi device.
+      Packet_Header *midi_header;   // Header pointer for overlaying on midi messages.
+      PmMessage message;            // Message to receive midi into.
+      PmEvent event;                // Event to play the midi message.
+      MyPmEvent *my_event;          // Event to send to output midi device.
 
       // Returns true if there's a response ready for receiving from the server.
       int check_for_response(uint32_t timeout);
@@ -58,6 +69,9 @@ class Client {
 
       // Handles sync messages between the client and the server.
       void handle_sync();
+
+      // Parses the midi data sent to the client from the server.
+      void handle_midi_data();
 
       // Handles the waiting state of the client when it is sitting around for
       // instructions from the server.
@@ -102,6 +116,8 @@ class Client {
       void setup_udp_socket();
 
    public:
+      PtTimestamp midi_timer; // Midi timer (uint32_t)
+
       // Base constructor, takes in a list of arguments and their count to be
       // parsed and used for the filetransfer.
       Client(int num_args, char **arg_list);
