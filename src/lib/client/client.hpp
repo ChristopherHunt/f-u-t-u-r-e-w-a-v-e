@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <string>
 #include "network/network.hpp"
+#include <sys/time.h>
 
 #define MAX_TIMEOUTS 5
 #define INPUT_ARG_COUNT 3
