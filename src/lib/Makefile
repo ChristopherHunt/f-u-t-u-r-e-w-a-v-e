@@ -1,9 +1,3 @@
-ifeq ($(OS),Windows_NT)
-echo 'ur on windows go home'
-else
-    UNAME_S := $(shell uname -s)
-endif
-
 .PHONY: all clean install midifile portmidi wildmidi install-midifile install-wildmidi install-portmidi
 
 all: midifile portmidi wildmidi

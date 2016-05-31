@@ -3,12 +3,4 @@ objs := server_app.o
 
 app_libs := server.a libmidifile.a network.a
 
-LDFLAGS += -lportmidi -lporttime
-
-ifeq ($(UNAME_S),Darwin)
-    LDFLAGS :=
-endif
-
-# LDFLAGS += -lportmidi -lporttime
-
 include $(base_dir)/src/app.mk

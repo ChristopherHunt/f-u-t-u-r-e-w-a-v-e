@@ -6,12 +6,19 @@ log_dir := $(base_dir)/log
 bin_dir := $(base_dir)/bin
 bin_test_dir := $(bin_dir)/test
 
+ifeq ($(OS),Windows_NT)
+echo 'ur on windows go home'
+else
+    UNAME_S := $(shell uname -s)
+endif
+
 export base_dir
 export lib_dir
 export log_dir
 export bin_dir
 export bin_test_dir
 export LDFLAGS
+export UNAME_S
 
 CXXFLAGS += -I$(base_dir)/src/lib/
 
@@ -61,13 +68,13 @@ debug:
 build: clean dirs $(libraries) $(apps) $(tests)
 
 $(apps):
-	$(MAKE) -s -C $@
+	$(MAKE) -C $@
 
 $(libraries):
 	$(MAKE) -s -C $@
 
 $(tests):
-	$(MAKE) -s -C $@
+	$(MAKE) -C $@
 
 run:
 	#cd bin && ./buffer_app
