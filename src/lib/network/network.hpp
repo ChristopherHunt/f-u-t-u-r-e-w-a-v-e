@@ -12,7 +12,8 @@
 #define STDOUT 1
 #define STDERR 2
 
-#define MAX_BUF_SIZE 128
+#define SIZE_OF_MIDI_EVENT (3 * sizeof(uint8_t) + sizeof(uint32_t))
+#define MAX_BUF_SIZE 2048
 
 namespace flag {
    enum Packet_Flag { MIDI, ACK, SONG_START, SONG_FIN, HS, HS_GOOD, HS_FAIL,
