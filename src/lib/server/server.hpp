@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <deque>
 #include <string>
+#include <string.h>
 #include <unordered_map>
 #include <vector>
 #include "network/network.hpp"
