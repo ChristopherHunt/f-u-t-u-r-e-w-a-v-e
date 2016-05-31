@@ -195,6 +195,12 @@ void Client::handle_midi_data() {
       //fprintf(stderr, "client::handle_midi_data recevied: %d total bytes\n", total_bytes_recv);
    }
    ASSERT(total_bytes_recv == total_bytes_to_recv);
+   for(int i = 0; i < MAX_BUF_SIZE; ++i)
+   {
+        fprintf(stderr, "%x ", buf[i]);
+   }
+
+   fprintf(stderr,"\n");
 
    // Loop through all midi events
    for (uint8_t i = 0; i < num_midi_events; ++i) {
@@ -208,8 +214,7 @@ void Client::handle_midi_data() {
       // Wrap the message and its timestamp in a midi event 
       event.message = message;
       event.timestamp = my_event->timestamp;
-
-      //fprintf(stderr, "\t\tSending event %d to the midi device!\n", i);
+      fprintf(stderr, "Writing: %x, %x, %x\n", my_event->message[0], my_event->message[1], my_event->message[2]);   
       // Send this midi event to output
       Pm_Write(stream, &event, 1);
 

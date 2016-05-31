@@ -260,6 +260,7 @@ bool Server::parse_midi_input(){
          pmEvent.message[1] = midi_event[1];
          pmEvent.message[2] = midi_event[2];
 
+         fprintf(stderr, "Message: %x, %x, %x", pmEvent.message[0], pmEvent.message[1], pmEvent.message[2]);
          // Making a port midi event which can be sent to port midi to be played
          // This is a wrapper around the event that just carries the timestamp
          // to play the event at.
