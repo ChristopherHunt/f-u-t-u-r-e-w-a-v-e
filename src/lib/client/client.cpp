@@ -174,7 +174,7 @@ void Client::twiddle() {
 }
 
 void Client::handle_midi_data() {
-   fprintf(stderr, "Client::handle_midi_data!\n");
+   //fprintf(stderr, "Client::handle_midi_data!\n");
 
    // Receive the remainder of the midi song data.
    int buf_offset = sizeof(Packet_Header);
@@ -182,8 +182,8 @@ void Client::handle_midi_data() {
    int bytes_recv;
    uint8_t num_midi_events = midi_header->num_midi_events;
    int total_bytes_to_recv = num_midi_events * SIZEOF_MIDI_EVENT;
-   fprintf(stderr, "client::handle_midi_data num_midi_events: %d\n", num_midi_events);
-   fprintf(stderr, "client::handle_midi_data expecting: %d bytes\n", num_midi_events * SIZEOF_MIDI_EVENT);
+   //fprintf(stderr, "client::handle_midi_data num_midi_events: %d\n", num_midi_events);
+   //fprintf(stderr, "client::handle_midi_data expecting: %d bytes\n", num_midi_events * SIZEOF_MIDI_EVENT);
 
    while (total_bytes_recv != total_bytes_to_recv) {
       bytes_recv = recv_buf(server_sock, &server, buf + buf_offset,
@@ -192,7 +192,7 @@ void Client::handle_midi_data() {
          total_bytes_recv += bytes_recv;
          buf_offset = bytes_recv;
       }
-      fprintf(stderr, "client::handle_midi_data recevied: %d total bytes\n", total_bytes_recv);
+      //fprintf(stderr, "client::handle_midi_data recevied: %d total bytes\n", total_bytes_recv);
    }
    ASSERT(total_bytes_recv == total_bytes_to_recv);
 
@@ -209,7 +209,7 @@ void Client::handle_midi_data() {
       event.message = message;
       event.timestamp = my_event->timestamp;
 
-      fprintf(stderr, "\t\tSending event %d to the midi device!\n", i);
+      //fprintf(stderr, "\t\tSending event %d to the midi device!\n", i);
       // Send this midi event to output
       Pm_Write(stream, &event, 1);
 

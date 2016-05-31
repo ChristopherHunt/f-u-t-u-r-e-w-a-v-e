@@ -220,7 +220,7 @@ void Server::handle_wait_for_input() {
 }
 
 bool Server::parse_midi_input(){
-   fprintf(stderr, "Server:parse_midi_input!\n");
+   //fprintf(stderr, "Server:parse_midi_input!\n");
 
    midifile.read(filename.c_str());
 
@@ -264,15 +264,13 @@ bool Server::parse_midi_input(){
          // This is a wrapper around the event that just carries the timestamp
          // to play the event at.
          pmEvent.timestamp = midifile.getTimeInSeconds(midi_event.tick) * 1000.0;
-         fprintf(stderr, "track: %d -- event: %d -- timestamp %d\n", track,
-               event, pmEvent.timestamp);
+         //fprintf(stderr, "track: %d -- event: %d -- timestamp %d\n", track, event, pmEvent.timestamp);
 
          // Push the pmEvent onto the deque
          track_deque.push_back(pmEvent);
 
-         MyPmEvent *temp = &(track_deque.back());
-         fprintf(stderr, "temp track: %d -- event: %d -- timestamp %d\n", track,
-               event, temp->timestamp);
+         //MyPmEvent *temp = &(track_deque.back());
+         //fprintf(stderr, "temp track: %d -- event: %d -- timestamp %d\n", track, event, temp->timestamp);
       }
 
       // Give this track a handle to reference it later by
@@ -379,7 +377,7 @@ void Server::handle_normal_msg() {
 }
 
 void Server::handle_priority_msg() {
-   fprintf(stderr, "Server::handle_priority_msg!\n");
+   //fprintf(stderr, "Server::handle_priority_msg!\n");
    int result;
    ClientInfo *info;
    info = &(priority_messages.front());
@@ -393,7 +391,7 @@ void Server::handle_priority_msg() {
    // Update the client's info structure with the proper seq_num
    info->seq_num = ph->seq_num + 1;
 
-   fprintf(stderr, "Server::handle_priority_msg seq_num: %d\n", ph->seq_num);
+   //fprintf(stderr, "Server::handle_priority_msg seq_num: %d\n", ph->seq_num);
 
    // Parse the packet
    flag::Packet_Flag flag;
@@ -682,36 +680,36 @@ void Server::print_state() {
 }
 
 void Server::append_to_buf(MyPmEvent *event) {
-   fprintf(stderr, "append_to_buf!\n");
+   //fprintf(stderr, "append_to_buf!\n");
    ASSERT(event != NULL);
-   fprintf(stderr, "buf_offset: %d\n", buf_offset);
+   //fprintf(stderr, "buf_offset: %d\n", buf_offset);
    ASSERT(midi_header->flag == flag::MIDI);
    event->serialize(buf, buf_offset);
    buf_offset += SIZEOF_MIDI_EVENT;
    ++midi_header->num_midi_events;
-   fprintf(stderr, "SIZEOF_MIDI_EVENT: %d\n", SIZEOF_MIDI_EVENT);
-   fprintf(stderr, "midi_header->seq_num: %d\n", midi_header->seq_num);
-   fprintf(stderr, "midi_header->flag: %d\n", midi_header->flag);
-   fprintf(stderr, "midi_header->num_midi_events: %d\n", midi_header->num_midi_events);
+   //fprintf(stderr, "SIZEOF_MIDI_EVENT: %d\n", SIZEOF_MIDI_EVENT);
+   //fprintf(stderr, "midi_header->seq_num: %d\n", midi_header->seq_num);
+   //fprintf(stderr, "midi_header->flag: %d\n", midi_header->flag);
+   //fprintf(stderr, "midi_header->num_midi_events: %d\n", midi_header->num_midi_events);
 }
 
 int Server::send_midi_msg(ClientInfo *info) {
-   fprintf(stderr, "send_midi_msg!\n");
+   //fprintf(stderr, "send_midi_msg!\n");
    ASSERT(info != NULL);
-   fprintf(stderr, "buf_offset: %d\n", buf_offset);
+   //fprintf(stderr, "buf_offset: %d\n", buf_offset);
    ASSERT(midi_header->flag == flag::MIDI);
-   fprintf(stderr, "send_midi_msg to client fd %d\n", info->fd);
+   //fprintf(stderr, "send_midi_msg to client fd %d\n", info->fd);
    int bytes_sent = send_buf(info->fd, &info->addr, buf, buf_offset);
    buf_offset = 0;
    return bytes_sent;
 }
 
 void Server::setup_midi_msg(ClientInfo *info) {
-   fprintf(stderr, "setup_midi_msg!\n");
+   //fprintf(stderr, "setup_midi_msg!\n");
    ASSERT(info != NULL);
    midi_header->seq_num = ++info->seq_num;
    midi_header->flag = flag::MIDI;
    midi_header->num_midi_events = 0;
    buf_offset = sizeof(Packet_Header);
-   fprintf(stderr, "buf_offset: %d\n", buf_offset);
+   //fprintf(stderr, "buf_offset: %d\n", buf_offset);
 }
