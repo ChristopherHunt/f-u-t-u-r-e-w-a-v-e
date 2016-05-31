@@ -49,7 +49,7 @@ int main(int argc, char **argv) {
     cout << "Ticks per quarter note: " << midifile.getTicksPerQuarterNote() << endl;
     cout << "Is absolute time? : " << midifile.isAbsoluteTicks() << endl;
     cout << "Is delta time? : " << midifile.isDeltaTicks() << endl;
-    int track = 5;
+    int track = 0;
     
     for(int i=0; i < midifile[track].size(); i++)
     {
