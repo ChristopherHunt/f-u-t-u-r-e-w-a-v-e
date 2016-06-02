@@ -123,6 +123,7 @@ int write_event_info(ostream& out, MidiEvent event) {
     out << "COMMAND : 0x" << std::uppercase << std::hex << (UNIB & command_byte) << endl;
     out << "NOTE    : 0x" << std::uppercase << std::hex << (LNIB & command_byte) << endl;
     cout << "---------------" << endl;
+    return EXIT_SUCCESS;
 }
 
 int write_event_stats(ostream& out, MidiFile midifile) {
