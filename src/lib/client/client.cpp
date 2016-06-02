@@ -30,6 +30,9 @@ Client::Client(int num_args, char **arg_list) {
    // Have the midi_header overlay the buf.
    midi_header = (Packet_Header *)buf;
 
+   // Clear buffer
+   memset(buf, '\0', MAX_BUF_SIZE);
+
    // Ensure that command line arguments are good.
    if (!parse_inputs(num_args, arg_list)) {
       print_usage();
@@ -146,8 +149,9 @@ void Client::twiddle() {
    // Wait for packet
    if (check_for_response(0)) {
       // Recive the packet into the buffer
-      int bytes_recv = recv_buf(server_sock, &server, buf, sizeof(Packet_Header));
-      ASSERT(bytes_recv == sizeof(Packet_Header));
+      int bytes_recv = recv_buf(server_sock, &server, buf, MAX_BUF_SIZE);
+      //int bytes_recv = recv_buf(server_sock, &server, buf, sizeof(Packet_Header));
+      //ASSERT(bytes_recv == sizeof(Packet_Header));
 
       // Treat this message as a normal message
       Packet_Header *ph = (Packet_Header*)buf;
@@ -174,36 +178,65 @@ void Client::twiddle() {
 }
 
 void Client::handle_midi_data() {
-   //fprintf(stderr, "Client::handle_midi_data!\n");
+   fprintf(stderr, "Client::handle_midi_data!\n");
+   for (int i = 0; i < MAX_BUF_SIZE; ++i) {
+      fprintf(stderr, "%02x ", buf[i]);
+   }
 
+   /*
    // Receive the remainder of the midi song data.
-   int buf_offset = sizeof(Packet_Header);
-   int total_bytes_recv = 0;
    int bytes_recv;
+   int total_bytes_recv = sizeof(Packet_Header);
    uint8_t num_midi_events = midi_header->num_midi_events;
    int total_bytes_to_recv = num_midi_events * SIZEOF_MIDI_EVENT;
-   //fprintf(stderr, "client::handle_midi_data num_midi_events: %d\n", num_midi_events);
-   //fprintf(stderr, "client::handle_midi_data expecting: %d bytes\n", num_midi_events * SIZEOF_MIDI_EVENT);
+   fprintf(stderr, "client::handle_midi_data num_midi_events: %d\n",
+         num_midi_events);
+   fprintf(stderr, "client::handle_midi_data expecting: %d bytes\n",
+         num_midi_events * SIZEOF_MIDI_EVENT);
 
    while (total_bytes_recv != total_bytes_to_recv) {
-      bytes_recv = recv_buf(server_sock, &server, buf + buf_offset,
+      fprintf(stderr, "here!\n");
+      bytes_recv = recv_buf(server_sock, &server, buf + total_bytes_recv,
             total_bytes_to_recv - total_bytes_recv);
+      fprintf(stderr, "bytes_recv: %d\n", bytes_recv);
       if (bytes_recv >= 0) {
+         for (int i = 0; i < bytes_recv; ++i) {
+            fprintf(stderr, "%02x ", *(buf + total_bytes_recv + i));
+         }
+         fprintf(stderr, "\n");
          total_bytes_recv += bytes_recv;
-         buf_offset = bytes_recv;
       }
       //fprintf(stderr, "client::handle_midi_data recevied: %d total bytes\n", total_bytes_recv);
    }
-   ASSERT(total_bytes_recv == total_bytes_to_recv);
-   for(int i = 0; i < MAX_BUF_SIZE; ++i)
-   {
-        fprintf(stderr, "%x ", buf[i]);
-   }
 
+   ASSERT(total_bytes_recv == total_bytes_to_recv);
+
+   // TODO -- REMOVE
+   fprintf(stderr, "00 -- ");
+   for (int i = 0; i < 6; ++i) {
+      fprintf(stderr, "%02x ", buf[i]);
+   }
+   fprintf(stderr, "\n01 -- ");
+   int j = 0;
+   int k = 1;
+   for(int i = 6; i < MAX_BUF_SIZE; ++i)
+   {
+      fprintf(stderr, "%02x ", buf[i]);
+      ++j;
+      if (j == 7) {
+         fprintf(stderr, "\n%02x -- ", ++k);
+         j = 0;
+      }
+   }
    fprintf(stderr,"\n");
+   //
+   */
+
+   int buf_offset = sizeof(Packet_Header);
+   uint8_t num_midi_events = midi_header->num_midi_events;
 
    // Loop through all midi events
-   for (uint8_t i = 0; i < num_midi_events; ++i) {
+   for (int i = 0; i < num_midi_events; ++i) {
       // Pull out each midi message from the buffer 
       my_event = (MyPmEvent *)(buf + buf_offset);
 
@@ -214,7 +247,17 @@ void Client::handle_midi_data() {
       // Wrap the message and its timestamp in a midi event 
       event.message = message;
       event.timestamp = my_event->timestamp;
-      fprintf(stderr, "Writing: %x, %x, %x\n", my_event->message[0], my_event->message[1], my_event->message[2]);   
+
+      /*
+      // TODO -- REMOVE
+      uint8_t *ptr = (uint8_t *)my_event;
+      for (int j = 0; j < SIZEOF_MIDI_EVENT; ++j) {
+         fprintf(stderr, "%02x ", ptr[j]);
+      }
+      fprintf(stderr, "\n");
+      //
+      */
+
       // Send this midi event to output
       Pm_Write(stream, &event, 1);
 

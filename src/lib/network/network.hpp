@@ -63,7 +63,7 @@ typedef struct MyPmEvent {
       memcpy(buf + offset, &timestamp, sizeof(uint32_t));
       //fprintf(stderr, "serialize: buf[%d]: %d\n", offset, buf[offset]);
    }
-} MyPmEvent;
+} __attribute__((packed)) MyPmEvent;
 
 typedef struct Packet_Header {
    uint32_t seq_num;

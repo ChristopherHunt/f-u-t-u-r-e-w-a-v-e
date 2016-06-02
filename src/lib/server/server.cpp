@@ -33,6 +33,11 @@ Server::Server(int num_args, char **arg_list) {
    // Setup main socket for the server to listen for clients on.
    setup_udp_socket();
 
+   // TODO: Remove -- this is just to test playing music locally to troubleshoot
+   // packets!
+   //setup_music_locally();
+   //
+
    // Initialize all variables needed by the server.
    init();
 
@@ -260,7 +265,8 @@ bool Server::parse_midi_input(){
          pmEvent.message[1] = midi_event[1];
          pmEvent.message[2] = midi_event[2];
 
-         fprintf(stderr, "Message: %x, %x, %x", pmEvent.message[0], pmEvent.message[1], pmEvent.message[2]);
+         fprintf(stderr, "Message: %x, %x, %x \n", pmEvent.message[0], pmEvent.message[1], pmEvent.message[2]);
+
          // Making a port midi event which can be sent to port midi to be played
          // This is a wrapper around the event that just carries the timestamp
          // to play the event at.
@@ -517,7 +523,7 @@ void Server::handle_parse_song() {
 }
 
 void Server::handle_play_song() {
-   fprintf(stderr, "Server::handle_play_song!\n");
+   //fprintf(stderr, "Server::handle_play_song!\n");
 
    song_is_playing = false;
    MyPmEvent event;
@@ -530,11 +536,11 @@ void Server::handle_play_song() {
 
    // Loop through all of the clients
    for (client_it = fd_to_client_info.begin(); client_it != fd_to_client_info.end();
-      ++client_it) {
+         ++client_it) {
 
       // Loop through all of the tracks that this client is assigned
       for (track_it = client_it->second.tracks.begin();
-           track_it != client_it->second.tracks.end(); ++track_it) {
+            track_it != client_it->second.tracks.end(); ++track_it) {
 
          // Get the deque that corresponds to the track
          track_deque = &(track_queues[*track_it]);
@@ -546,7 +552,7 @@ void Server::handle_play_song() {
             event = track_deque->front();
 
             // Setup the buffer to send a midi message if its time to send.
-            std::cout << "\tMidi Timer: " << midi_timer << std::endl; 
+            //std::cout << "\tMidi Timer: " << midi_timer << std::endl; 
             if (event.timestamp <= midi_timer) {
                // Get the current client
                client = &(client_it->second);
@@ -556,13 +562,17 @@ void Server::handle_play_song() {
                while (track_deque->size() && event.timestamp <= midi_timer) {
                   // Pull the midi message out of the PmEvent
                   memcpy(message, event.message, 3 * sizeof(uint8_t));
-                  std::cout << '\t' << std::hex;
-                  std::cout << "Message: " << message << std::endl << std::dec;
-                  std::cout << "\tMessage Timestamp: " << event.timestamp << std::endl;
-                  std::cout << "\tMidi Timer: " << midi_timer << std::endl; 
+                  //std::cout << '\t' << std::hex;
+                  //std::cout << "Message: " << message << std::endl << std::dec;
+                  //std::cout << "\tMessage Timestamp: " << event.timestamp << std::endl;
+                  //std::cout << "\tMidi Timer: " << midi_timer << std::endl; 
 
                   // Add this event to the buffered midi message
                   append_to_buf(&event);
+
+                  // TODO -- this is for testing the notes locally
+                  //play_music_locally(buf, (buf_offset - SIZEOF_MIDI_EVENT));
+                  //
 
                   // Remove the first event from the queue
                   track_deque->pop_front();
@@ -628,34 +638,6 @@ void Server::wait_for_handshake() {
    exit(1);
 }
 
-void Server::ready_go() {
-   while (true) {
-      switch (state) {
-         case server::HANDSHAKE:
-            handle_handshake();
-            break;
-         case server::WAIT_FOR_INPUT:
-            handle_wait_for_input();
-            break;
-         case server::PARSE_SONG:
-            handle_parse_song();
-            break;
-         case server::PLAY_SONG:
-            handle_play_song();
-            break;
-         case server::SONG_FIN:
-            handle_song_fin();
-            break;
-         case server::DONE:
-            handle_done();
-            break;
-         default:
-            handle_abort();
-            break;
-      }
-   }
-}
-
 void Server::print_state() {
    ClientInfo info;
    fprintf(stderr, "Server state:\n");
@@ -686,20 +668,35 @@ void Server::append_to_buf(MyPmEvent *event) {
    //fprintf(stderr, "buf_offset: %d\n", buf_offset);
    ASSERT(midi_header->flag == flag::MIDI);
    event->serialize(buf, buf_offset);
+   /*
+   for (int i = 0; i < sizeof(MyPmEvent); ++i) {
+      *(buf + buf_offset + i) = 1;
+   }
+   */
    buf_offset += SIZEOF_MIDI_EVENT;
    ++midi_header->num_midi_events;
    //fprintf(stderr, "SIZEOF_MIDI_EVENT: %d\n", SIZEOF_MIDI_EVENT);
    //fprintf(stderr, "midi_header->seq_num: %d\n", midi_header->seq_num);
    //fprintf(stderr, "midi_header->flag: %d\n", midi_header->flag);
    //fprintf(stderr, "midi_header->num_midi_events: %d\n", midi_header->num_midi_events);
+   uint8_t *ptr = (uint8_t *)event;
+   fprintf(stderr, "Server::append_to_buf\n");
+   for (int i = 0; i < sizeof(MyPmEvent); ++i) {
+      fprintf(stderr, "%02x ", ptr[i]);
+   }
+   fprintf(stderr, "\n");
 }
 
 int Server::send_midi_msg(ClientInfo *info) {
-   //fprintf(stderr, "send_midi_msg!\n");
+   fprintf(stderr, "send_midi_msg!\n");
    ASSERT(info != NULL);
    //fprintf(stderr, "buf_offset: %d\n", buf_offset);
    ASSERT(midi_header->flag == flag::MIDI);
    //fprintf(stderr, "send_midi_msg to client fd %d\n", info->fd);
+   for (int i = 0; i < buf_offset; ++i) {
+      fprintf(stderr, "%02x ", *(buf + i));
+   }
+   fprintf(stderr, "send_midi_mesg done!\n");
    int bytes_sent = send_buf(info->fd, &info->addr, buf, buf_offset);
    buf_offset = 0;
    return bytes_sent;
@@ -713,4 +710,90 @@ void Server::setup_midi_msg(ClientInfo *info) {
    midi_header->num_midi_events = 0;
    buf_offset = sizeof(Packet_Header);
    //fprintf(stderr, "buf_offset: %d\n", buf_offset);
+   //
+   uint8_t *ptr = (uint8_t *)buf;
+   fprintf(stderr, "Server::setup_midi_msg\n");
+   for (int i = 0; i < sizeof(Packet_Header); ++i) {
+      fprintf(stderr, "%02x ", ptr[i]);
+   }
+   fprintf(stderr, "\n");
+}
+
+void Server::setup_music_locally() {
+   Pm_Initialize();
+   int default_device_id = Pm_GetDefaultOutputDeviceID();
+
+   // Setup the output stream for playing midi.
+   Pm_OpenOutput(&stream, default_device_id, NULL, 1, NULL, NULL, 0);
+}
+
+// Assumes that it is receiving a single serialized midi event
+void Server::play_music_locally(uint8_t *buf, int offset) {
+   PmMessage message;
+   PmEvent event;
+
+   MyPmEvent *my_event = (MyPmEvent *)(buf + offset);
+
+   // Make a message object to wrap this midi message
+   message = Pm_Message(my_event->message[0], my_event->message[1],
+         my_event->message[2]); 
+
+   // Wrap the message and its timestamp in a midi event 
+   event.message = message;
+   event.timestamp = my_event->timestamp;
+
+   // TODO -- REMOVE
+   uint8_t *ptr = (uint8_t *)my_event;
+   fprintf(stderr, "Server::play_music_locally\n");
+   for (int j = 0; j < SIZEOF_MIDI_EVENT; ++j) {
+      fprintf(stderr, "%02x ", ptr[j]);
+   }
+   fprintf(stderr, "\n");
+   //
+
+   // Send this midi event to output
+   Pm_Write(stream, &event, 1);
+
+   /*
+      uint8_t *ptr = (uint8_t *)my_event;
+      fprintf(stderr, "printing midi event\n");
+      for (int i = 0; i < sizeof(MyPmEvent); ++i) {
+      fprintf(stderr, "%x ", ptr[i]); 
+      }
+      fprintf(stderr, "\n");
+
+      message = Pm_Message(my_event->message[0], my_event->message[1],
+      my_event->message[2]);
+      event.message = message;
+      event.timestamp = my_event->timestamp;
+      Pm_Write(stream, &event, 1);
+      */
+}
+
+void Server::ready_go() {
+   while (true) {
+      switch (state) {
+         case server::HANDSHAKE:
+            handle_handshake();
+            break;
+         case server::WAIT_FOR_INPUT:
+            handle_wait_for_input();
+            break;
+         case server::PARSE_SONG:
+            handle_parse_song();
+            break;
+         case server::PLAY_SONG:
+            handle_play_song();
+            break;
+         case server::SONG_FIN:
+            handle_song_fin();
+            break;
+         case server::DONE:
+            handle_done();
+            break;
+         default:
+            handle_abort();
+            break;
+      }
+   }
 }

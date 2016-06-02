@@ -16,7 +16,7 @@
 #include "portmidi/include/porttime.h"
 
 #define NUM_SYNC_TRIALS 3     // Number of times to sync with a client to
-// established an avg. delay profile.
+                              // established an avg. delay profile.
 
 typedef struct ClientInfo {
    int fd;
@@ -52,19 +52,17 @@ class Server {
 
       server::State state;        // Current state of the Server's state machine.
       std::deque<ClientInfo> priority_messages; // deque of ClientInfo with high priority
-
       MidiFile midifile;          // Midifile object to parse midi data
 
-      // Vector of events to play and their client to play them
-      std::unordered_map<int, std::deque<MyPmEvent> > track_queues;
-      //std::vector<std::pair<int, std::deque<MyPmEvent> > > track_queues;
       PtError time_error;         // Time error
-
       uint8_t buf[MAX_BUF_SIZE];  // Temporary buffer to hold a received packet.
       uint64_t buf_offset;        // Offset to index into the buffer with.
-      Packet_Header *midi_header; // Header overlaid on buf to investiage midi msgs.
+      Packet_Header *midi_header; // Header overlaid on buf to investiage midi msgs
 
-      bool song_is_playing;       // Flag to tell the state machine we are playing a song.
+      bool song_is_playing;       // Tells the state machine we are playing a song
+
+      // Mapping of tracks to their queue of events to be played.
+      std::unordered_map<int, std::deque<MyPmEvent> > track_queues;
 
       // Mapping of client socket fd to the client's ClientInfo struct.
       std::unordered_map<int, ClientInfo> fd_to_client_info;
@@ -173,6 +171,12 @@ class Server {
       // Prints the state of the server's priority_message deque and the
       // fd_to_client_info map.
       void print_state();
+
+      // TODO -- For testing only
+      void play_music_locally(uint8_t *buf, int offset);
+      void setup_music_locally();
+      PortMidiStream *stream;       // Pointer to the port midi output stream.
+      //
 
    public:
       PtTimestamp midi_timer;     // Midi timer (int32_t)
