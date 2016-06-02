@@ -37,7 +37,6 @@ void process_midi(PtTimestamp timestamp, void *userData);
 class Server {
    private:
       uint32_t port;              // The server's port.
-      double error_percent;       // The percentage of packets the server drops
 
       int server_sock;            // Server's socket fd.
       sockaddr_in local;          // Local socket config.
