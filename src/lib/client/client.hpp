@@ -27,7 +27,8 @@ class Client {
       uint32_t server_port;         // Port of server.
       std::string server_machine;   // Server's IP.
 
-      double error_percent;         // Percentage of packets to lose or corrupt.
+      // double error_percent;         // Percentage of packets to lose or corrupt.
+      long simulated_latency;
       fd_set rdfds;                 // Set of fds to select on.
       struct timeval tv;            // Timeval for select.
       uint8_t timeout_count;        // # times select has timed out in a row.
@@ -58,11 +59,14 @@ class Client {
       // Configures a fresh FD_SET that contains the server_sock.
       void config_fd_set();
 
-      // Handles the exit message from the server, closing the client. 
+      // Handles the exit message from the server, closing the client.
       void handle_done();
 
       // Handles the setup of the client with the server.
       void handle_handshake();
+
+      // Parses the midi data sent to the client from the server.
+      void handle_midi_data();
 
       // Handles the playing of the song's midi events from the server.
       void handle_play();
@@ -70,15 +74,8 @@ class Client {
       // Handles sync messages between the client and the server.
       void handle_sync();
 
-      // Parses the midi data sent to the client from the server.
-      void handle_midi_data();
-
-      // Handles the waiting state of the client when it is sitting around for
-      // instructions from the server.
-      void twiddle();
-
       // Parses a handshake ack, returning its flag.
-      flag::Packet_Flag parse_handshake_ack(); 
+      flag::Packet_Flag parse_handshake_ack();
 
       // Parses a list of arguments which correspond to the required
       // configuration options for the client class. If any errors are
@@ -93,27 +90,26 @@ class Client {
       // play a song.
       void ready_go();
 
-      // Checks for outstanding messages to the client object and processes
-      // all of them, updating internal bookkeeping.
-      void recv_and_parse_midi_data();
-
-      // Assemble and send the handshake packet to the server.
-      void send_handshake();
-
-      // Sends the ack to the server so that the server knows the client is
-      // ready to go!
-      void send_handshake_fin();
-
       // Recv's the contents of a UDP message into the client's message buffer
       // for futher processing by other functions, requiring that packet_size
       // number of bytes are recv'd.
       int recv_packet_into_buf(uint32_t packet_size);
+
+      // Assemble and send the handshake packet to the server.
+      void send_handshake();
+      // Sends the ack to the server so that the server knows the client is
+      // ready to go!
+      void send_handshake_fin();
 
       // Sets tv to have timeout seconds.
       void set_timeval(uint32_t timeout);
 
       // Sets up the client's socket to connect to the server on.
       void setup_udp_socket();
+
+      // Handles the waiting state of the client when it is sitting around for
+      // instructions from the server.
+      void twiddle();
 
    public:
       PtTimestamp midi_timer; // Midi timer (uint32_t)

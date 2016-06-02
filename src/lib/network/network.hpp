@@ -3,7 +3,7 @@
 
 #include <netdb.h>   // sockaddr_in
 #include <stdint.h>
-#include <string>
+#include <string.h>
 
 #define FALSE 0
 #define TRUE 1
