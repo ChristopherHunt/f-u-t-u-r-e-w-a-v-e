@@ -14,8 +14,6 @@
 #include "network/network.hpp"
 #include "server/server.hpp"
 
-enum parse_args {ERROR_PERCENT, PORT};
-
 Server::Server(int num_args, char **arg_list) {
    // Ensure that command line arguments are good.
    if (!parse_inputs(num_args, arg_list)) {
@@ -464,29 +462,20 @@ bool Server::parse_handshake() {
 }
 
 bool Server::parse_inputs(int num_args, char **arg_list) {
-   if (num_args != 1 && num_args != 2) {
+   if (num_args > 1) {
       printf("Improper argument count.\n");
       return false;
    }
 
    char *endptr;
+   port = 0;
 
-   error_percent = strtod(arg_list[ERROR_PERCENT], &endptr);
-   if (endptr == arg_list[ERROR_PERCENT] || error_percent < 0 || error_percent > 1) {
-      printf("Invalid error percent: '%s'\n", arg_list[ERROR_PERCENT]);
-      printf("Error percent must be between 0 and 1 inclusive.\n");
-      return false;
-   }
-
-   if (num_args == 2) {
-      port = (uint32_t)strtol(arg_list[PORT], &endptr, 10);
-      if (endptr == arg_list[PORT]) {
-         printf("Invalid port: '%s'\n", arg_list[PORT]);
+   if (num_args == 1) {
+      port = (uint32_t)strtol(arg_list[0], &endptr, 10);
+      if (endptr == arg_list[0]) {
+         printf("Invalid port: '%s'\n", arg_list[0]);
          return false;
       }
-   }
-   else {
-      port = 0;
    }
 
    return true;
@@ -585,7 +574,7 @@ void Server::print_state() {
 }
 
 void Server::print_usage() {
-   printf("Usage: server <error-rate> [remote-port]\n");
+   printf("Usage: server [remote-port]\n");
 }
 
 int Server::send_midi_msg(ClientInfo *info) {
@@ -661,20 +650,11 @@ void Server::wait_for_handshake() {
 }
 
 void Server::setup_midi_msg(ClientInfo *info) {
-   //fprintf(stderr, "setup_midi_msg!\n");
    ASSERT(info != NULL);
    midi_header->seq_num = ++info->seq_num;
    midi_header->flag = flag::MIDI;
    midi_header->num_midi_events = 0;
    buf_offset = sizeof(Packet_Header);
-   //fprintf(stderr, "buf_offset: %d\n", buf_offset);
-   //
-   uint8_t *ptr = (uint8_t *)buf;
-   fprintf(stderr, "Server::setup_midi_msg\n");
-   for (int i = 0; i < sizeof(Packet_Header); ++i) {
-      fprintf(stderr, "%02x ", ptr[i]);
-   }
-   fprintf(stderr, "\n");
 }
 
 void Server::setup_music_locally() {

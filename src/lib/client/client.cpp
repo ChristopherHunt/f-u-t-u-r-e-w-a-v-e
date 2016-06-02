@@ -96,17 +96,17 @@ void Client::handle_handshake() {
          case flag::HS_GOOD:
             // Start the midi timer
             Pm_Initialize();
-            fprintf(stderr, "Initialized!\n");
+            // fprintf(stderr, "Initialized!\n");
             Pt_Start(1, &process_midi, (void *)this);
-            fprintf(stderr, "timer started!\n");
+            // fprintf(stderr, "timer started!\n");
 
             // Get the default midi device
             default_device_id = Pm_GetDefaultOutputDeviceID();
-            fprintf(stderr, "default_device_id: %d\n", default_device_id);
+            // fprintf(stderr, "default_device_id: %d\n", default_device_id);
 
             // Setup the output stream for playing midi.
             Pm_OpenOutput(&stream, default_device_id, NULL, 1, NULL, NULL, 0);
-            fprintf(stderr, "Opened stream!\n");
+            // fprintf(stderr, "Opened stream!\n");
 
             timeout_count = 0;
             send_handshake_fin();
@@ -114,7 +114,7 @@ void Client::handle_handshake() {
             break;
 
          case flag::HS_FAIL:
-            fprintf(stderr, "Could not handshake with the server!\n");
+            // fprintf(stderr, "Could not handshake with the server!\n");
             state = client::DONE;
             break;
 
@@ -136,10 +136,10 @@ void Client::handle_handshake() {
 }
 
 void Client::handle_midi_data() {
-   fprintf(stderr, "Client::handle_midi_data!\n");
-   for (int i = 0; i < MAX_BUF_SIZE; ++i) {
-      fprintf(stderr, "%02x ", buf[i]);
-   }
+  //  fprintf(stderr, "Client::handle_midi_data!\n");
+  //  for (int i = 0; i < MAX_BUF_SIZE; ++i) {
+  //     fprintf(stderr, "%02x ", buf[i]);
+  //  }
 
    /*
    // Receive the remainder of the midi song data.
@@ -230,20 +230,20 @@ void Client::handle_play() {
 }
 
 void Client::handle_sync() {
-   fprintf(stderr, "Client::handle_sync!\n");
+  //  fprintf(stderr, "Client::handle_sync!\n");
    int bytes_sent;
    // Parse the handshake ack to get the seq number.
    Packet_Header *ph = (Packet_Header *)buf;
    seq_num = ph->seq_num;
 
-   fprintf(stderr, "the server sent seq_num: %d\n", seq_num);
+  //  fprintf(stderr, "the server sent seq_num: %d\n", seq_num);
 
    // Build the handshake fin packet
    ++seq_num;
    ph->seq_num = seq_num;
    ph->flag = flag::SYNC_ACK;
 
-   fprintf(stderr, "responding with seq_num: %d\n", ph->seq_num);
+  //  fprintf(stderr, "responding with seq_num: %d\n", ph->seq_num);
 
    // Send the handshake fin packet to the server.
    uint16_t packet_size = sizeof(Packet_Header);
@@ -267,8 +267,8 @@ bool Client::parse_inputs(int num_args, char **arg_list) {
 
    simulated_latency = strtol(arg_list[SIMULATED_LATENCY], &endptr, 10);
    if (endptr == arg_list[SIMULATED_LATENCY] || simulated_latency < 0) {
-      printf("Invalid error percent: '%s'\n", arg_list[SIMULATED_LATENCY]);
-      printf("Error percent must be between 0 and 1 inclusive.\n");
+      printf("Invalid simulated latency: '%s'\n", arg_list[SIMULATED_LATENCY]);
+      printf("Simulated latency must be greater than 0\n");
       return false;
    }
 
@@ -335,7 +335,7 @@ void Client::send_handshake() {
 void Client::send_handshake_fin() {
    int bytes_sent;
 
-   fprintf(stderr, "Client::send_handshake_fin!\n");
+  //  fprintf(stderr, "Client::send_handshake_fin!\n");
    // Parse the handshake ack to get the seq number.
    Handshake_Packet *hs = (Handshake_Packet *)buf;
    seq_num = hs->header.seq_num;
@@ -408,7 +408,7 @@ void Client::twiddle() {
             break;
          default:
             fprintf(stderr, "Client::twiddle fell through!\n");
-            fprintf(stderr, "packet flag: %d\n", flag);
+            // fprintf(stderr, "packet flag: %d\n", flag);
             ASSERT(FALSE);
             break;
       }
