@@ -1,8 +1,7 @@
-app := midi_file_app.fw
-objs := midi_file_app.o
+app := linux_midi_test.fw
+objs := linux_midi_test.o
 
 app_libs := libmidifile.a
-
 
 ifeq ($(UNAME_S), Darwin)
 	LDFLAGS += -lportmidi
