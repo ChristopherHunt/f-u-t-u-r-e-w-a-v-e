@@ -36,30 +36,30 @@ void process_midi(PtTimestamp timestamp, void *userData);
 
 class Server {
    private:
+      uint32_t port;              // The server's port.
+      double error_percent;       // The percentage of packets the server drops
+
       int server_sock;            // Server's socket fd.
       sockaddr_in local;          // Local socket config.
-      uint32_t port;              // The server's port.
       fd_set normal_fds;          // Set of fds to for normal messages.
       fd_set priority_fds;        // Set of fds for priority messages.
       struct timeval tv;          // Timeval for select.
 
       int file_fd;                // File descriptor to the song file to read/play
       std::string filename;       // Name of the song file to read/play
-
-      double error_percent;       // The percentage of packets the server drops
-
-      int next_client_id;         // The id to be assigned to the next client.
-
-      server::State state;        // Current state of the Server's state machine.
-      std::deque<ClientInfo> priority_messages; // deque of ClientInfo with high priority
-      MidiFile midifile;          // Midifile object to parse midi data
-
-      PtError time_error;         // Time error
       uint8_t buf[MAX_BUF_SIZE];  // Temporary buffer to hold a received packet.
       uint64_t buf_offset;        // Offset to index into the buffer with.
+
+      int next_client_id;         // The id to be assigned to the next client.
+      bool song_is_playing;       // Tells the state machine we are playing a song
+      server::State state;        // Current state of the Server's state machine.
+      MidiFile midifile;          // Midifile object to parse midi data
+      PtError time_error;         // Time error
       Packet_Header *midi_header; // Header overlaid on buf to investiage midi msgs
 
-      bool song_is_playing;       // Tells the state machine we are playing a song
+      // Deque of ClientInfo with high priority. This deque will be checked
+      // before all other client messages to handle high priority packets.
+      std::deque<ClientInfo> priority_messages;
 
       // Mapping of tracks to their queue of events to be played.
       std::unordered_map<int, std::deque<MyPmEvent> > track_queues;
@@ -71,20 +71,8 @@ class Server {
       // messages in the buffer's midi_header.
       void append_to_buf(MyPmEvent *event);
 
-      // Sends the content in the buffer to the client at the specified socket.
-      int send_midi_msg(ClientInfo *info);
-
-      // Sets up the buffer as a midi message to the specified client.
-      void setup_midi_msg(ClientInfo *);
-
       // computes delay profile times in the delay times vector
       void calc_delay(ClientInfo &client);
-
-      // Configures the fd_set to contain the stdin.
-      void config_fd_set_for_stdin();
-
-      // Configures the fd_set to contain the server_sock.
-      void config_fd_set_for_server_socket();
 
       // Configures the fd_set to contain all normal traffic.
       void config_fd_set_for_normal_traffic();
@@ -92,27 +80,23 @@ class Server {
       // Configures the fd_set for priority traffic
       void config_fd_set_for_priority_traffic();
 
+      // Configures the fd_set to contain the server_sock.
+      void config_fd_set_for_server_socket();
+
+      // Configures the fd_set to contain the stdin.
+      void config_fd_set_for_stdin();
+
       // Checks to see if there are any available connections.
-      int new_connection_ready(fd_set fds);
+      int connection_ready(fd_set fds);
 
-      // Parses command line arguments
-      bool parse_inputs(int num_args, char **arg_list);
+      // Handles aborting the server.
+      void handle_abort();
 
-      // Prints the usage message specifying the input arguments to the Server
-      // constructor.
-      void print_usage();
+      // Handles any message sent from the client to the server.
+      void handle_client_packet(int fd);
 
-      // Sets the timeval struct tv to have timeout number of seconds.
-      void set_timeval(uint32_t timeout);
-
-      // Sets up the server's socket to receive connections on.
-      void setup_udp_socket();
-
-      // Returns the number of fds with pending packets to recv.
-      int check_for_response(uint32_t timeout);
-
-      // Initialize all variables in the Server object to default values.
-      void init();
+      // Determines what the delay of the client is.
+      void handle_client_timing(ClientInfo& info);
 
       // Cleanup after the file transfer.
       void handle_done();
@@ -120,36 +104,36 @@ class Server {
       // Handles the handshake portion of the file transfer.
       void handle_handshake();
 
-      void handle_wait_for_input();
-
-      void handle_parse_song();
-
-      void handle_play_song();
-
-      void handle_song_fin();
-
-      void handle_abort();
-
-      void handle_client_packet(int fd);
-
-      void handle_client_timing(ClientInfo& info);
-
-      // Handle input from the user on stdin
-      void handle_stdin();
-
-      // Handle a new client that has connected to the server
+      // Handle a new client that has connected to the server.
       void handle_new_client();
 
-      // Handle a normal message from the client
+      // Handle a normal message from the client.
       void handle_normal_msg();
 
-      // Handle a priority message from the client
+      // Parses the midi song, breaking it down into subsequent tracks and
+      // assigning those tracks to clients for playing.
+      void handle_parse_song();
+
+      // Checks to see if midi event(s) are ready to be played and sends them
+      // out to the client(s).
+      void handle_play_song();
+
+      // Handle a priority message from the client.
       void handle_priority_msg();
 
-      // Sends a sync packet to the client specified by the ClientInfo struct,
-      // incrementing its seq_num count and setting the last_msg_send_time field
-      // to the current time.
-      void send_sync_packet(ClientInfo& info);
+      // Handles the end of a song (if we want to do this still).
+      void handle_song_fin();
+
+      // Handle input from the user on stdin.
+      void handle_stdin();
+
+      // Handles the state where the client is waiting for an event to occur
+      // (either a midi event is ready to be sent or a client has responded
+      // / connected).
+      void handle_wait_for_input();
+
+      // Initialize all variables in the Server object to default values.
+      void init();
 
       // Returns true if the specified local file for writing was opened.
       int open_target_file(std::string& target_filename);
@@ -157,24 +141,53 @@ class Server {
       // Parses a handshake packet and returns true if it is valid.
       bool parse_handshake();
 
+      // Parses command line arguments
+      bool parse_inputs(int num_args, char **arg_list);
+
       // Parses the midi song to determine if valid
       bool parse_midi_input();
+
+      // Prints the state of the server's priority_message deque and the
+      // fd_to_client_info map.
+      void print_state();
+
+      // Prints the usage message specifying the input arguments to the Server
+      // constructor.
+      void print_usage();
+
+      // The main state machine loop for the server.
+      void ready_go();
+
+      // Sends the content in the buffer to the client at the specified socket.
+      int send_midi_msg(ClientInfo *info);
+
+      // Sends a sync packet to the client specified by the ClientInfo struct,
+      // incrementing its seq_num count and setting the last_msg_send_time field
+      // to the current time.
+      void send_sync_packet(ClientInfo& info);
+
+      // Sets up the buffer as a midi message to the specified client.
+      void setup_midi_msg(ClientInfo *);
+
+      // Sets up the server's socket to receive connections on.
+      void setup_udp_socket();
+
+      // Sets the timeval struct tv to have timeout number of seconds.
+      void set_timeval(uint32_t timeout);
 
       // Waits 10 seconds for a handshake packet to come in. If one does
       // arrive, the packet is parsed and the state of the file transfer
       // is advanced if the packet is good.
       void wait_for_handshake();
 
-      // The main state machine loop for the server.
-      void ready_go();
-
-      // Prints the state of the server's priority_message deque and the
-      // fd_to_client_info map.
-      void print_state();
-
       // TODO -- For testing only
-      void play_music_locally(uint8_t *buf, int offset);
+      // Call this to setup the PortMidi timer and device.
       void setup_music_locally();
+
+      // Call this to play the music in buf at a given offset through the midi
+      // device.
+      void play_music_locally(uint8_t *buf, int offset);
+
       PortMidiStream *stream;       // Pointer to the port midi output stream.
       //
 

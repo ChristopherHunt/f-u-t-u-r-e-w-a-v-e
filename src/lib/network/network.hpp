@@ -55,13 +55,9 @@ typedef struct MyPmEvent {
 
    void serialize(uint8_t *buf, uint64_t offset) {
       buf[offset++] = message[0];
-      //fprintf(stderr, "serialize: buf[%d]: %d\n", offset - 1, buf[offset - 1]);
       buf[offset++] = message[1];
-      //fprintf(stderr, "serialize: buf[%d]: %d\n", offset - 1, buf[offset - 1]);
       buf[offset++] = message[2];
-      //fprintf(stderr, "serialize: buf[%d]: %d\n", offset - 1, buf[offset - 1]);
       memcpy(buf + offset, &timestamp, sizeof(uint32_t));
-      //fprintf(stderr, "serialize: buf[%d]: %d\n", offset, buf[offset]);
    }
 } __attribute__((packed)) MyPmEvent;
 
