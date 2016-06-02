@@ -136,11 +136,6 @@ void Client::handle_handshake() {
 }
 
 void Client::handle_midi_data() {
-   fprintf(stderr, "Client::handle_midi_data!\n");
-   for (int i = 0; i < MAX_BUF_SIZE; ++i) {
-      fprintf(stderr, "%02x ", buf[i]);
-   }
-
    /*
    // Receive the remainder of the midi song data.
    int bytes_recv;
