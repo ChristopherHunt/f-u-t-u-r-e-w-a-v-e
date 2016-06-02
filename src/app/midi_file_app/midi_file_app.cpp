@@ -23,7 +23,7 @@ void process_midi(PtTimestamp timestamp, void *userData)
         // Remove played event
         eventQueue->pop();
         // Peek at the top of the queue;
-        event = eventQueue->front();   
+        event = eventQueue->front();
     }
 }
 
@@ -45,17 +45,23 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
+    // for (int i = 0, end = Pa_GetDeviceCount(); i != end; ++i) {
+    //     PaDeviceInfo const* info = Pa_GetDeviceInfo(i);
+    //     if (!info) continue;
+    //     printf("%d: %s\n", i, info->name);
+    // }
+
     cout << "Midi file name: " << midifile.getFilename() << endl;
     cout << "Ticks per quarter note: " << midifile.getTicksPerQuarterNote() << endl;
     cout << "Is absolute time? : " << midifile.isAbsoluteTicks() << endl;
     cout << "Is delta time? : " << midifile.isDeltaTicks() << endl;
     int track = 0;
-    
+
     for(int i=0; i < midifile[track].size(); i++)
     {
         MidiEvent event = (MidiEvent)midifile[track][i];
         cout << "Midi event at tick " << event.tick << endl;
-        printMidiPacketInfo(event);         
+        printMidiPacketInfo(event);
     }
 
     // Test out port midi
@@ -67,15 +73,15 @@ int main(int argc, char **argv) {
     cout << "opening device for writing..." << endl;
 
     stream = new PortMidiStream*;
-    PtError timeError = Pt_Start(1, &process_midi, NULL); 
+    PtError timeError = Pt_Start(1, &process_midi, NULL);
     if (timeError != 0)
     {
         cout << "Error starting timer: " << timeError;
         exit(1);
-    }    
+    }
     cout << "Timer started" << endl;
 
-    PmError midiError = Pm_OpenOutput(stream, defaultDeviceID, NULL, 1, NULL, NULL, 0); 
+    PmError midiError = Pm_OpenOutput(stream, defaultDeviceID, NULL, 1, NULL, NULL, 0);
 
     if (midiError != 0)
     {
@@ -86,7 +92,7 @@ int main(int argc, char **argv) {
     cerr << "Opened midi device successfully!" << endl;
 
     // Openening event queue
-    eventQueue = new queue<PmEvent *>(); 
+    eventQueue = new queue<PmEvent *>();
 
     //for(int i=0; i < midifile[1].size(); i++)
     for(int i=0; i < midifile[track].size(); i++)
@@ -106,21 +112,21 @@ int main(int argc, char **argv) {
         PmEvent *pmEvent = new PmEvent;
         pmEvent->timestamp = midifile.getTimeInSeconds(event.tick) * 1000.0;
         pmEvent->message = message;
-        
+
         // Throw the event into the queue
-        eventQueue->push(pmEvent);    
+        eventQueue->push(pmEvent);
     }
-    
+
     do
     {
         cout << '\n' << "Press any key to exit...";
     } while (cin.get() != '\n');
-    
-    Pt_Stop(); 
+
+    Pt_Stop();
     Pm_Close(stream);
     Pm_Terminate();
 
-   
+
     return 0;
 }
 
@@ -135,7 +141,7 @@ void printMidiPacketInfo(MidiEvent event)
         if(event.isTempo())
         {
             cout << "tempo: " << event.getTempoBPM() << "bpm" << endl;
-        } 
+        }
     }
 
     if(event.isController())
@@ -151,12 +157,12 @@ void printMidiPacketInfo(MidiEvent event)
     if(event.isPressure())
     {
         cout << "\t Is Pressure message: " <<  event[1] << endl;
-        
+
     }
 
     if(event.isNoteOn())
     {
-        cout << "\t Is note on: " << event.getKeyNumber() << endl; 
+        cout << "\t Is note on: " << event.getKeyNumber() << endl;
     }
 
     if(event.isNoteOff())
