@@ -25,6 +25,7 @@ typedef struct ClientInfo {
    long avg_delay;
    long last_msg_send_time;
    std::vector<long> delay_times;
+   std::unordered_map<uint32_t, long> packet_to_send_time;
    std::vector<int> tracks;
 } ClientInfo;
 
@@ -49,12 +50,13 @@ class Server {
       uint8_t buf[MAX_BUF_SIZE];  // Temporary buffer to hold a received packet.
       uint64_t buf_offset;        // Offset to index into the buffer with.
 
+      Handshake_Packet *hs;       // Overlay on top of the buffer.
+      Packet_Header *midi_header; // Overlay on top of the buffer.
       int next_client_id;         // The id to be assigned to the next client.
       bool song_is_playing;       // Tells the state machine we are playing a song
       server::State state;        // Current state of the Server's state machine.
       MidiFile midifile;          // Midifile object to parse midi data
       PtError time_error;         // Time error
-      Packet_Header *midi_header; // Header overlaid on buf to investiage midi msgs
 
       // Deque of ClientInfo with high priority. This deque will be checked
       // before all other client messages to handle high priority packets.

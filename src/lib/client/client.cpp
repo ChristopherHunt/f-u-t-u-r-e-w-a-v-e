@@ -30,6 +30,9 @@ Client::Client(int num_args, char **arg_list) {
    // Have the midi_header overlay the buf.
    midi_header = (Packet_Header *)buf;
 
+   // Clear the midi_ack's unneeded fields to avoid printout confusion.
+   midi_ack.num_midi_events = 0;
+
    // Clear buffer
    memset(buf, '\0', MAX_BUF_SIZE);
 
@@ -134,6 +137,9 @@ void Client::handle_handshake() {
 }
 
 void Client::handle_midi_data() {
+   // Respond to client with a midi ack first to reduce latency
+   send_midi_ack();
+
    int buf_offset = sizeof(Packet_Header);
    uint8_t num_midi_events = midi_header->num_midi_events;
 
@@ -166,18 +172,12 @@ void Client::handle_play() {
 void Client::handle_sync() {
    fprintf(stderr, "Client::handle_sync!\n");
    int bytes_sent;
-   // Parse the handshake ack to get the seq number.
-   Packet_Header *ph = (Packet_Header *)buf;
-   seq_num = ph->seq_num;
-
-   fprintf(stderr, "the server sent seq_num: %d\n", seq_num);
 
    // Build the handshake fin packet
-   ++seq_num;
-   ph->seq_num = seq_num;
-   ph->flag = flag::SYNC_ACK;
+   midi_header->seq_num = seq_num;
+   midi_header->flag = flag::SYNC_ACK;
 
-   fprintf(stderr, "responding with seq_num: %d\n", ph->seq_num);
+   fprintf(stderr, "responding with seq_num: %d\n", midi_header->seq_num);
 
    // Send the handshake fin packet to the server.
    uint16_t packet_size = sizeof(Packet_Header);
@@ -227,8 +227,9 @@ void Client::print_usage() {
 }
 
 int Client::recv_packet_into_buf(uint32_t packet_size) {
-   int bytes_recv = recv_buf(server_sock, &server, buf, packet_size);
-   ASSERT(bytes_recv == packet_size);
+   int bytes_recv;
+   bytes_recv = recv_buf(server_sock, &server, buf, MAX_BUF_SIZE);
+   seq_num = midi_header->seq_num + 1;
    return bytes_recv;
 }
 
@@ -252,11 +253,9 @@ void Client::send_handshake_fin() {
    fprintf(stderr, "Client::send_handshake_fin!\n");
    // Parse the handshake ack to get the seq number.
    Handshake_Packet *hs = (Handshake_Packet *)buf;
-   seq_num = hs->header.seq_num;
-   ASSERT(seq_num == 1);
+   ASSERT(hs->header.seq_num == 1);
 
    // Build the handshake fin packet
-   ++seq_num;
    hs->header.seq_num = seq_num;
    ASSERT(hs->header.seq_num == 2);
    hs->header.flag = flag::HS_FIN;
@@ -264,6 +263,17 @@ void Client::send_handshake_fin() {
    // Send the handshake fin packet to the server.
    uint16_t packet_size = sizeof(Handshake_Packet);
    bytes_sent = send_buf(server_sock, &server, buf, packet_size);
+   ASSERT(bytes_sent == packet_size);
+}
+
+void Client::send_midi_ack() {
+   int bytes_sent;
+
+   fprintf(stderr, "sending seq_num %d\n", seq_num);
+   midi_ack.seq_num = seq_num;
+   midi_ack.flag = flag::MIDI_ACK;
+   uint16_t packet_size = sizeof(Handshake_Packet);
+   bytes_sent = send_buf(server_sock, &server, (uint8_t *)&midi_ack, packet_size);
    ASSERT(bytes_sent == packet_size);
 }
 
@@ -296,14 +306,13 @@ void Client::twiddle() {
    // Wait for packet
    if (check_for_response(0)) {
       // Recive the packet into the buffer
-      recv_buf(server_sock, &server, buf, MAX_BUF_SIZE);
-
-      // Treat this message as a normal message
-      Packet_Header *ph = (Packet_Header*)buf;
+      recv_packet_into_buf(MAX_BUF_SIZE);
 
       // Parse the packet
       flag::Packet_Flag flag;
-      flag = (flag::Packet_Flag)ph->flag;
+      flag = (flag::Packet_Flag)midi_header->flag;
+
+      fprintf(stderr, "the server sent seq_num: %d\n", midi_header->seq_num);
 
       // This packet has to either be a handshake_fin packet or a sync_ack packet.
       switch (flag) {

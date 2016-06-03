@@ -42,6 +42,7 @@ class Client {
       PortMidiStream *stream;       // Pointer to the port midi output stream.
       int default_device_id;        // Default device id for this midi device.
       Packet_Header *midi_header;   // Header pointer for overlaying on midi messages.
+      Packet_Header midi_ack;       // Structure used for acking midi messages.
       PmMessage message;            // Message to receive midi into.
       PmEvent event;                // Event to play the midi message.
       MyPmEvent *my_event;          // Event to send to output midi device.
@@ -88,15 +89,21 @@ class Client {
       void ready_go();
 
       // Recv's the contents of a UDP message into the client's message buffer
-      // for futher processing by other functions, requiring that packet_size
-      // number of bytes are recv'd.
+      // for futher processing by other functions. Also sets the Client's
+      // seq_num to be 1 greater than that of the recv'd packet. Returns the
+      // number of bytes received.
       int recv_packet_into_buf(uint32_t packet_size);
 
       // Assemble and send the handshake packet to the server.
       void send_handshake();
+
       // Sends the ack to the server so that the server knows the client is
       // ready to go!
       void send_handshake_fin();
+
+      // Increments the sequence number and sends an ack to the server for a
+      // midi message.
+      void send_midi_ack();
 
       // Sets tv to have timeout seconds.
       void set_timeval(uint32_t timeout);

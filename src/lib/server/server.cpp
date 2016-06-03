@@ -31,6 +31,9 @@ Server::Server(int num_args, char **arg_list) {
    // Setup main socket for the server to listen for clients on.
    setup_udp_socket();
 
+   // Overlay a Handshake_Packet over the front of the buffer for future use.
+   hs = (Handshake_Packet *)buf;
+
    // TODO: Remove -- this is just to test playing music locally to troubleshoot
    // packets!
    //setup_music_locally();
@@ -114,8 +117,18 @@ void Server::handle_abort() {
 }
 
 void Server::handle_client_packet(int fd) {
-   fprintf(stderr, "Server::handle_client_packet!\n");
-   exit(1);
+   ASSERT(fd >= 0);
+   int bytes_recv;
+
+   ClientInfo *info = &fd_to_client_info[fd];
+
+   bytes_recv = recv_buf(fd, &info->addr, buf, MAX_BUF_SIZE);
+
+   fprintf(stderr, "Client responded with seq_num %d\n", midi_header->seq_num);
+   // Compare the expected seq_num with the actual seq_num
+   // if the seq_num's don't line up, we had packet loss
+   // Update the client's seq_num
+   // Update the client's delay
 }
 
 // This function handles setting up the client's timing.
@@ -177,9 +190,6 @@ void Server::handle_new_client() {
    result = recv_buf(server_sock, &info.addr, buf, sizeof(Handshake_Packet));
    ASSERT(result == sizeof(Handshake_Packet));
 
-   // Treat this message as a handshake
-   Handshake_Packet *hs = (Handshake_Packet *)buf;
-
    // Parse the handshake packet
    flag::Packet_Flag flag;
    flag = (flag::Packet_Flag)hs->header.flag;
@@ -187,6 +197,9 @@ void Server::handle_new_client() {
    // Make sure the packet flag is a handshake
    ASSERT(flag == flag::HS);
 
+   // FIXME: This doesn't work because each client will be assigned a unique
+   // port to communicate with the server on. So you would need to have the
+   // client send some unique id in order to know who is who.
    std::deque<ClientInfo>::iterator it;
    for (it = priority_messages.begin(); it != priority_messages.end(); ++it) {
       // If the client already has a stale entry in the priority message queue,
@@ -228,7 +241,7 @@ void Server::handle_new_client() {
 }
 
 void Server::handle_normal_msg() {
-   fprintf(stderr, "Server::handle_normal_msg!\n");
+   //fprintf(stderr, "Server::handle_normal_msg!\n");
    for (int i = STDERR + 1; i <= FD_SETSIZE; ++i) {
       if (FD_ISSET(i, &normal_fds)) {
          handle_client_packet(i);
@@ -348,17 +361,12 @@ void Server::handle_priority_msg() {
    result = recv_buf(info->fd, &info->addr, buf, sizeof(Packet_Header));
    ASSERT(result == sizeof(Packet_Header));
 
-   // Treat this message as a normal message
-   Packet_Header *ph = (Packet_Header*)buf;
-
    // Update the client's info structure with the proper seq_num
-   info->seq_num = ph->seq_num + 1;
-
-   //fprintf(stderr, "Server::handle_priority_msg seq_num: %d\n", ph->seq_num);
+   info->seq_num = ++midi_header->seq_num;
 
    // Parse the packet
    flag::Packet_Flag flag;
-   flag = (flag::Packet_Flag)ph->flag;
+   flag = (flag::Packet_Flag)midi_header->flag;
 
    // This packet has to either be a handshake_fin packet or a sync_ack packet.
    switch (flag) {
@@ -584,21 +592,30 @@ void Server::print_usage() {
 int Server::send_midi_msg(ClientInfo *info) {
    ASSERT(info != NULL);
    ASSERT(midi_header->flag == flag::MIDI);
+
+   // Get the current server wall-clock time.
+   long current_time;
+   get_current_time(&current_time);
+
+   // Store the seq_num to send time mapping for this message.
+   info->packet_to_send_time[info->seq_num] = current_time;
+
+   // Fire off the packet
    int bytes_sent = send_buf(info->fd, &info->addr, buf, buf_offset);
+
+   // Reset the offset into the buffer for the next message to build on.
    buf_offset = 0;
+
    return bytes_sent;
 }
 
 void Server::send_sync_packet(ClientInfo& info) {
    int result;
 
-   // Build sync packet to send to the client
-   Packet_Header *ph = (Packet_Header *)buf;
-
    // Rebuild the packet to the client
    memset(buf, '\0', MAX_BUF_SIZE);
-   ph->seq_num = info.seq_num;
-   ph->flag = flag::SYNC;
+   midi_header->seq_num = info.seq_num;
+   midi_header->flag = flag::SYNC;
 
    // Send sync packet to client
    result = send_buf(info.fd, &info.addr, buf, sizeof(Packet_Header));
@@ -606,6 +623,15 @@ void Server::send_sync_packet(ClientInfo& info) {
 
    // Set the send time in the ClientInfo struct
    get_current_time(&(info.last_msg_send_time));
+}
+
+void Server::setup_midi_msg(ClientInfo *info) {
+   ASSERT(info != NULL);
+   info->seq_num += 2;
+   midi_header->seq_num = info->seq_num;
+   midi_header->flag = flag::MIDI;
+   midi_header->num_midi_events = 0;
+   buf_offset = sizeof(Packet_Header);
 }
 
 void Server::setup_udp_socket() {
@@ -653,14 +679,6 @@ void process_midi(PtTimestamp timestamp, void *userData) {
 void Server::wait_for_handshake() {
    fprintf(stderr, "Server::wait_for_handshake unimplemented!\n");
    exit(1);
-}
-
-void Server::setup_midi_msg(ClientInfo *info) {
-   ASSERT(info != NULL);
-   midi_header->seq_num = ++info->seq_num;
-   midi_header->flag = flag::MIDI;
-   midi_header->num_midi_events = 0;
-   buf_offset = sizeof(Packet_Header);
 }
 
 void Server::setup_music_locally() {

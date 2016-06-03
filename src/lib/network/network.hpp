@@ -34,8 +34,8 @@
 }
 
 namespace flag {
-   enum Packet_Flag { BLANK, MIDI, ACK, SONG_START, SONG_FIN, HS, HS_GOOD, HS_FAIL,
-      HS_FIN, SYNC, SYNC_ACK };
+   enum Packet_Flag { BLANK, MIDI, MIDI_ACK, SONG_START, SONG_FIN, HS, HS_GOOD,
+      HS_FAIL, HS_FIN, SYNC, SYNC_ACK };
 };
 
 typedef uint8_t MyPmMessage[3];
