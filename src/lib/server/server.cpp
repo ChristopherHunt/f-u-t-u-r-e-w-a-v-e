@@ -260,7 +260,8 @@ void Server::handle_parse_song() {
 
          // Start the timer with 1 millisecond resolution and creates a thread to call
          // the process_midi function every 1 millisecond.
-         time_error = Pt_Start(1, &process_midi, (void *)this); 
+         time_error = Pt_Start(1, &process_midi, (void *)this);
+        //  fprintf(stderr, "value time_error: %d\n", time_error);
       }
       else {
          fprintf(stderr, "Midi song no good!\n");
@@ -299,11 +300,13 @@ void Server::handle_play_song() {
             event = track_deque->front();
 
             // Setup the buffer to send a midi message if its time to send.
-            //std::cout << "\tMidi Timer: " << midi_timer << std::endl; 
+            //std::cout << "\tMidi Timer: " << midi_timer << std::endl;
+            // fprintf(stderr, "value midi_timer: %d\n", midi_timer);
             if (event.timestamp <= midi_timer) {
+
                // Get the current client
                client = &(client_it->second);
-               setup_midi_msg(client); 
+               setup_midi_msg(client);
 
                // If any of the queues have events that need to be sent
                while (track_deque->size() && event.timestamp <= midi_timer) {
@@ -444,6 +447,7 @@ void Server::handle_wait_for_input() {
 void Server::init() {
    file_fd = 0;
    next_client_id = 0;
+   midi_timer = 0;
    memset(buf, '\0', MAX_BUF_SIZE);
 }
 
@@ -642,6 +646,8 @@ void Server::set_timeval(uint32_t timeout) {
 void process_midi(PtTimestamp timestamp, void *userData) {
    // Lookup the time and populate the server's clock
    ((Server *)userData)->midi_timer = Pt_Time();
+
+  //  fprintf(stderr, "value pt_time: %d\n", ((Server *)userData)->midi_timer);
 }
 
 void Server::wait_for_handshake() {
@@ -674,9 +680,9 @@ void Server::play_music_locally(uint8_t *buf, int offset) {
 
    // Make a message object to wrap this midi message
    message = Pm_Message(my_event->message[0], my_event->message[1],
-         my_event->message[2]); 
+         my_event->message[2]);
 
-   // Wrap the message and its timestamp in a midi event 
+   // Wrap the message and its timestamp in a midi event
    event.message = message;
    event.timestamp = my_event->timestamp;
 

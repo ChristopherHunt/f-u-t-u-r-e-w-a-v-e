@@ -70,7 +70,7 @@ class Server {
       // messages in the buffer's midi_header.
       void append_to_buf(MyPmEvent *event);
 
-      // computes delay profile times in the delay times vector
+      // computehandle_plays delay profile times in the delay times vector
       void calc_delay(ClientInfo &client);
 
       // Configures the fd_set to contain all normal traffic.
