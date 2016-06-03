@@ -24,6 +24,7 @@ typedef struct ClientInfo {
    uint32_t seq_num;
    long avg_delay;
    long last_msg_send_time;
+   uint32_t expected_seq_num;
    std::vector<long> delay_times;
    std::unordered_map<uint32_t, long> packet_to_send_time;
    std::vector<int> tracks;

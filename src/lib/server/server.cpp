@@ -119,16 +119,52 @@ void Server::handle_abort() {
 void Server::handle_client_packet(int fd) {
    ASSERT(fd >= 0);
    int bytes_recv;
+   long current_time;
+   long rtt;
+   uint32_t actual_seq_num;
 
+   // Get the current time
+   get_current_time(&current_time);
+
+   // Get a reference to this client's info
    ClientInfo *info = &fd_to_client_info[fd];
 
+   // Receive the message into the buffer
    bytes_recv = recv_buf(fd, &info->addr, buf, MAX_BUF_SIZE);
 
+   // Extract the packet's seq_num
+   actual_seq_num = midi_header->seq_num;
    fprintf(stderr, "Client responded with seq_num %d\n", midi_header->seq_num);
-   // Compare the expected seq_num with the actual seq_num
-   // if the seq_num's don't line up, we had packet loss
-   // Update the client's seq_num
+   fprintf(stderr, "expected_seq_num %d\n", info->expected_seq_num);
+   
+   // If the actual sequence number in the received packet is greater than the
+   // expected_seq_num then we had packet loss (we will not concern
+   // ourselves with reordering for now).
+   if (actual_seq_num != info->expected_seq_num) {
+      // Drop all of the sequence number tracking for packets that came before
+      // the current packet we just received (because we assume those packets
+      // are lost).
+      while (info->expected_seq_num < actual_seq_num) {
+         info->packet_to_send_time.erase(info->expected_seq_num);
+         info->expected_seq_num += 2;
+      }
+   }
+
+   // Determine the rtt for the packet.
+   rtt = current_time - info->packet_to_send_time[actual_seq_num];
+
+   // Remove this packet timing entry from the map of packets to dispatch time
+   info->packet_to_send_time.erase(actual_seq_num);
+
    // Update the client's delay
+   // FIXME: Need to make this better, right now this is just a placeholder!
+   // Ideally we will try multiple versions of delay computing so we can see
+   // which works best.
+   info->avg_delay = rtt / 2;
+
+   // TODO: Remove!!!!
+   print_state();
+   //
 }
 
 // This function handles setting up the client's timing.
@@ -219,6 +255,9 @@ void Server::handle_new_client() {
 
    // Update the client's sequence number
    info.seq_num = ++(hs->header.seq_num);
+
+   // Update the client's expected_seq_num
+   info.expected_seq_num = info.seq_num + 1;
 
    // Set the new client info's timing info to zero.
    info.avg_delay = 0;
@@ -363,6 +402,9 @@ void Server::handle_priority_msg() {
 
    // Update the client's info structure with the proper seq_num
    info->seq_num = ++midi_header->seq_num;
+
+   // Update the client's expected_seq_num
+   info->expected_seq_num = info->seq_num + 1;
 
    // Parse the packet
    flag::Packet_Flag flag;
@@ -568,7 +610,8 @@ void Server::print_state() {
    for (int i = 0; i < priority_messages.size(); ++i) {
       info = priority_messages[i];
       fprintf(stderr, "\t\tfd:        %d\n", info.fd);
-      fprintf(stderr, "\t\tseq_num:   %d\n", info.seq_num);
+      fprintf(stderr, "\t\tseq_num to send next:   %d\n", info.seq_num);
+      fprintf(stderr, "\t\texpected_seq_num to recv next:   %d\n", info.expected_seq_num);
       fprintf(stderr, "\t\tavg_delay: %lu\n", info.avg_delay);
       fprintf(stderr, "\t\tlast_send: %lu\n", info.last_msg_send_time);
       fprintf(stderr, "\t\tdelay_times.size(): %lu\n", info.delay_times.size());
@@ -577,10 +620,12 @@ void Server::print_state() {
    fprintf(stderr, "\tfd_to_client_info:\n");
    std::unordered_map<int, ClientInfo>::iterator it;
    for (it = fd_to_client_info.begin(); it != fd_to_client_info.end(); ++it) {
-      fprintf(stderr, "\t\tfd:        %d\n", it->second.fd);
-      fprintf(stderr, "\t\tseq_num:   %d\n", it->second.seq_num);
-      fprintf(stderr, "\t\tavg_delay: %lu\n", it->second.avg_delay);
-      fprintf(stderr, "\t\tlast_send: %lu\n", it->second.last_msg_send_time);
+      info = it->second;
+      fprintf(stderr, "\t\tfd:        %d\n", info.fd);
+      fprintf(stderr, "\t\tseq_num to send next:   %d\n", info.seq_num);
+      fprintf(stderr, "\t\texpected_seq_num to recv next:   %d\n", info.expected_seq_num);
+      fprintf(stderr, "\t\tavg_delay: %lu\n", info.avg_delay);
+      fprintf(stderr, "\t\tlast_send: %lu\n", info.last_msg_send_time);
       fprintf(stderr, "\n");
    }
 }
@@ -597,14 +642,20 @@ int Server::send_midi_msg(ClientInfo *info) {
    long current_time;
    get_current_time(&current_time);
 
-   // Store the seq_num to send time mapping for this message.
-   info->packet_to_send_time[info->seq_num] = current_time;
+   // Store the seq_num to send time mapping for this message. Note that we are
+   // storing the seq_num + 1 (which is the expected seq_num for the ack to this
+   // message) in the map for easy lookup later.
+   info->packet_to_send_time[info->seq_num + 1] = current_time;
 
    // Fire off the packet
    int bytes_sent = send_buf(info->fd, &info->addr, buf, buf_offset);
 
    // Reset the offset into the buffer for the next message to build on.
    buf_offset = 0;
+
+   // Increment the seq_num so we know what the next packet should go out with
+   info->seq_num += 2;
+   fprintf(stderr, "setting client %d seq_num to %d\n", info->fd, info->seq_num);
 
    return bytes_sent;
 }
@@ -627,7 +678,6 @@ void Server::send_sync_packet(ClientInfo& info) {
 
 void Server::setup_midi_msg(ClientInfo *info) {
    ASSERT(info != NULL);
-   info->seq_num += 2;
    midi_header->seq_num = info->seq_num;
    midi_header->flag = flag::MIDI;
    midi_header->num_midi_events = 0;
@@ -739,7 +789,7 @@ void Server::ready_go() {
             handle_done();
             break;
          default:
-            handle_abort();
+           handle_abort();
             break;
       }
    }
