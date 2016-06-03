@@ -9,12 +9,14 @@
 #include "portmidi/include/porttime.h"
 
 #define MAX_TIMEOUTS 5
-#define INPUT_ARG_COUNT 3
+#define INPUT_ARG_COUNT 4
 
 namespace client {
    enum Client_State { HANDSHAKE, TWIDDLE, PLAY, DONE };
 };
 
+// Function for seperate PortMidi thread to call to update timestamps within the
+// client object.
 void process_midi(PtTimestamp timestamp, void *userData);
 
 class Client {
@@ -27,17 +29,15 @@ class Client {
       uint32_t server_port;         // Port of server.
       std::string server_machine;   // Server's IP.
 
-      // double error_percent;         // Percentage of packets to lose or corrupt.
-      long simulated_latency;
+      int seq_num;                  // The current packet sequence number.
       fd_set rdfds;                 // Set of fds to select on.
       struct timeval tv;            // Timeval for select.
       uint8_t timeout_count;        // # times select has timed out in a row.
 
-      uint8_t buf[MAX_BUF_SIZE];    // Buffer used for message handling.
-      uint32_t buffer_size;         // Buffer size for packet data region.
+      long delay;                   // Simulated network delay
+      int midi_channel;             // Target midi channel to play out of
 
-      int seq_num;                  // The current packet sequence number.
-      uint32_t max_packet_num;      // Max packet sequence number expected.
+      uint8_t buf[MAX_BUF_SIZE];    // Buffer used for message handling.
 
       PortMidiStream *stream;       // Pointer to the port midi output stream.
       int default_device_id;        // Default device id for this midi device.
@@ -52,9 +52,6 @@ class Client {
       // Checks if the current select_timeout is equal to the max allowable
       // timeouts, and if it is is prints an error message and exits.
       void check_timeout();
-
-      // Frees all resources held by the client for a given song.
-      void cleanup();
 
       // Configures a fresh FD_SET that contains the server_sock.
       void config_fd_set();
