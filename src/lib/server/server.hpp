@@ -18,16 +18,44 @@
 #define NUM_SYNC_TRIALS 3     // Number of times to sync with a client to
                               // established an avg. delay profile.
 
+#define NUM_DELAY_SAMPLES 50  // Number of delay times each client keeps track
+                              // of when computing average delay.
+
 typedef struct ClientInfo {
+   // Client's socket fd
    int fd;
+
+   // Client's socket address information
    sockaddr_in addr;
+
+   // Current sequence number to send next for this client
    uint32_t seq_num;
-   long avg_delay;
-   long last_msg_send_time;
+
+   // The expected next sequence number from the client
    uint32_t expected_seq_num;
-   std::vector<long> delay_times;
-   std::unordered_map<uint32_t, long> packet_to_send_time;
+
+   // The average delay of this client (used for syncing with other clients)
+   long avg_delay;
+
+   // The time the last sync message was sent to the client
+   long last_msg_send_time;
+
+   // A temp variable to hold syncing values (which are averaged before putting
+   // them into the delay_times deque).
+   long session_delay;
+
+   // A counter to determine how many times to send sync packets per sync
+   // session.
+   int session_delay_counter;
+
+   // Container of sync times which can be averaged.
+   std::deque<long> delay_times;
+
+   // Tracks this client is responsible for playing (the server uses this to
+   // figure out who to send tracks to).
    std::vector<int> tracks;
+
+   //std::unordered_map<uint32_t, long> packet_to_send_time;
 } ClientInfo;
 
 namespace server {
@@ -60,6 +88,7 @@ class Server {
       server::State state;        // Current state of the Server's state machine.
       MidiFile midifile;          // Midifile object to parse midi data
       PtError time_error;         // Time error
+      long max_client_delay;      // The current max delay from any client
 
       // Iterator which decides which client to try and sync with at any given
       // time.
