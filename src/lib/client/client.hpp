@@ -58,6 +58,8 @@ class Client {
       // return trip).
       std::deque<std::pair<long, uint32_t> > queued_acks;
 
+      std::deque<std::pair<long, uint32_t> > queued_syncs;
+
       // Returns true if there's a response ready for receiving from the server.
       int check_for_response(uint32_t timeout);
 
@@ -81,7 +83,7 @@ class Client {
       void handle_play();
 
       // Handles sync messages between the client and the server.
-      void handle_sync();
+      void queue_sync();
 
       // Parses a handshake ack, returning its flag.
       flag::Packet_Flag parse_handshake_ack();
@@ -114,12 +116,6 @@ class Client {
       // number of bytes received.
       int recv_packet_into_buf(uint32_t packet_size);
 
-      // Sends buf_len of buf to the client specified by sock and remote after
-      // sleeping for the delay number of milliseconds. Returns the number of
-      // bytes sent.
-      int send_buf_delayed(int sock, sockaddr_in *remote, uint8_t *buf,
-         uint32_t buf_len, long delay);
-
       // Assemble and send the handshake packet to the server.
       void send_handshake();
 
@@ -130,6 +126,10 @@ class Client {
       // Increments the sequence number and sends an ack to the server for a
       // midi message.
       void send_midi_ack(uint32_t packet_seq_num);
+
+      // Sends a sync message to the server after delay amount of time to
+      // simulate latency in the network.
+      void send_sync_ack(uint32_t packet_seq_num);
 
       // Sets tv to have timeout seconds.
       void set_timeval(uint32_t timeout);
