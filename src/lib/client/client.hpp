@@ -2,15 +2,15 @@
 #define __CLIENT__HPP__
 
 #include <stdint.h>
+#include <sys/time.h>
+#include <deque>
 #include <string>
 #include "network/network.hpp"
-#include <sys/time.h>
 #include "portmidi/include/portmidi.h"
 #include "portmidi/include/porttime.h"
 
 #define INPUT_ARG_COUNT 4
 #define MAX_TIMEOUTS 5
-#define MICRO_TO_MILLISECONDS 1000
 
 namespace client {
    enum Client_State { HANDSHAKE, TWIDDLE, PLAY, DONE };
@@ -36,6 +36,7 @@ class Client {
       uint8_t timeout_count;        // # times select has timed out in a row.
 
       long delay;                   // Simulated network delay
+      long current_time;            // A variable to hold the current time.
       int midi_channel;             // Target midi channel to play out of
 
       uint8_t buf[MAX_BUF_SIZE];    // Buffer used for message handling.
@@ -47,6 +48,15 @@ class Client {
       PmMessage message;            // Message to receive midi into.
       PmEvent event;                // Event to play the midi message.
       MyPmEvent *my_event;          // Event to send to output midi device.
+
+      // Queue of midi events to play and their timestamps (this is used if
+      // delay is non-zero to simulate network delay on the initial trip).
+      std::deque<std::pair<long, MyPmEvent> > queued_events;
+
+      // Queue of sequence numbers of packets to ack and their timestamps (this
+      // is used if the delay is non-zerot o simulate network delay on the
+      // return trip).
+      std::deque<std::pair<long, uint32_t> > queued_acks;
 
       // Returns true if there's a response ready for receiving from the server.
       int check_for_response(uint32_t timeout);
@@ -65,7 +75,7 @@ class Client {
       void handle_handshake();
 
       // Parses the midi data sent to the client from the server.
-      void handle_midi_data();
+      void queue_midi_data();
 
       // Handles the playing of the song's midi events from the server.
       void handle_play();
@@ -81,9 +91,18 @@ class Client {
       // detected, a message will be printed and the program will exit.
       bool parse_inputs(int num_args, char **arg_list);
 
+      // Plays any events that are ready to go (based on the delay). This
+      // enforces the simulated front side latency (which goes away if delay is
+      // set to 0).
+      void play_midi_data();
+
       // Prints the usage message specifying the input arguments to the client
       // constructor.
       void print_usage();
+
+      // Adds the current sequence number and current timestamp to the queue of
+      // acks which will later be dispatched after delay amount of time.
+      void queue_midi_ack(uint32_t packet_seq_num);
 
       // Drops the client into the state machine to connect with the server and
       // play a song.
@@ -110,7 +129,7 @@ class Client {
 
       // Increments the sequence number and sends an ack to the server for a
       // midi message.
-      void send_midi_ack();
+      void send_midi_ack(uint32_t packet_seq_num);
 
       // Sets tv to have timeout seconds.
       void set_timeval(uint32_t timeout);

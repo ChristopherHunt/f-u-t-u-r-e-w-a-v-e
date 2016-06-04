@@ -136,17 +136,32 @@ void Client::handle_handshake() {
    }
 }
 
-void Client::handle_midi_data() {
-   // Respond to client with a midi ack first to reduce latency
-   send_midi_ack();
-
+void Client::queue_midi_data() {
    int buf_offset = sizeof(Packet_Header);
    uint8_t num_midi_events = midi_header->num_midi_events;
+
+   get_current_time(&current_time);
 
    // Loop through all midi events
    for (int i = 0; i < num_midi_events; ++i) {
       // Pull out each midi message from the buffer 
       my_event = (MyPmEvent *)(buf + buf_offset);
+
+      // Add the message to the queue along with its timestamp.
+      queued_events.push_back(std::make_pair(current_time + delay, *my_event));
+
+      // Move offset to next midi message
+      buf_offset += SIZEOF_MIDI_EVENT;
+   }
+}
+
+void Client::play_midi_data() {
+   get_current_time(&current_time);
+
+   // Play all events that are ready
+   while (queued_events.size() > 0 && queued_events.front().first < current_time) {
+      // Grab the event
+      my_event = &(queued_events.front().second);
 
       // Make a message object to wrap this midi message
       message = Pm_Message(my_event->message[0], my_event->message[1],
@@ -159,8 +174,8 @@ void Client::handle_midi_data() {
       // Send this midi event to output
       Pm_Write(stream, &event, 1);
 
-      // Move offset to next midi message
-      buf_offset += SIZEOF_MIDI_EVENT;
+      // Pop the event off the queue
+      queued_events.pop_front();
    }
 }
 
@@ -234,9 +249,8 @@ int Client::recv_packet_into_buf(uint32_t packet_size) {
 }
 
 int Client::send_buf_delayed(int sock, sockaddr_in *remote, uint8_t *buf,
-   uint32_t buf_len, long delay) {
-   
-   usleep(delay * MICRO_TO_MILLISECONDS);
+      uint32_t buf_len, long delay) {
+
    return send_buf(sock, remote, buf, buf_len);
 }
 
@@ -273,17 +287,29 @@ void Client::send_handshake_fin() {
    ASSERT(bytes_sent == packet_size);
 }
 
-void Client::send_midi_ack() {
+void Client::queue_midi_ack(uint32_t packet_seq_num) {
+   fprintf(stderr, "queue_midi_ack!\n");
+   get_current_time(&current_time);
+
+   queued_acks.push_back(std::make_pair(current_time + delay, packet_seq_num));
+}
+
+void Client::send_midi_ack(uint32_t packet_seq_num) {
+   fprintf(stderr, "send_midi_ack\n");
    int bytes_sent;
 
    print_debug("sending seq_num %d\n", seq_num);
 
-   midi_ack.seq_num = seq_num;
+   // Get the ack of the message to send.
+   midi_ack.seq_num = packet_seq_num;
    midi_ack.flag = flag::MIDI_ACK;
    uint16_t packet_size = sizeof(Handshake_Packet);
    bytes_sent = send_buf_delayed(server_sock, &server, (uint8_t *)&midi_ack,
-      packet_size, delay);
+         packet_size, delay);
    ASSERT(bytes_sent == packet_size);
+
+   // Remove the bookkeeping from the queue
+   queued_acks.pop_front();
 }
 
 void Client::set_timeval(uint32_t timeout) {
@@ -329,7 +355,7 @@ void Client::twiddle() {
             handle_sync();
             break;
          case flag::MIDI:
-            handle_midi_data();
+            queue_midi_data();
             break;
          default:
             fprintf(stderr, "Client::twiddle fell through!\n");
@@ -337,6 +363,32 @@ void Client::twiddle() {
             ASSERT(FALSE);
             break;
       }
+   }
+
+   /*
+   fprintf(stderr, "current_time: %lu\n", current_time);
+   if (queued_acks.size() > 0) {
+      fprintf(stderr, "queued_acks.front().first: %lu\n", queued_acks.front().first);
+   }
+   if (queued_events.size() > 0) {
+      fprintf(stderr, "queued_events.front().first: %lu\n", queued_events.front().first);
+   }
+   */
+
+   get_current_time(&current_time);
+   // Check to see if we need to ack any packets
+   if (queued_acks.size() > 0 && queued_acks.front().first < current_time) {
+      // Send the ack
+      send_midi_ack(queued_acks.front().second);
+   }
+
+   get_current_time(&current_time);
+   // Check to see if we need to play any midi events
+   if (queued_events.size() > 0 &&
+         queued_events.front().first < current_time) {
+
+      // Play the midi data
+      play_midi_data();
    }
 }
 

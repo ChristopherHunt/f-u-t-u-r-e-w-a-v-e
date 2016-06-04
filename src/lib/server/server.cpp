@@ -174,7 +174,6 @@ void Server::handle_client_timing(ClientInfo& info) {
    // Get the difference between the current time and the previous time to
    // determine the rtt.
    rtt = current_time - info.last_msg_send_time;
-   fprintf(stderr, "rtt: %lu\n", rtt);
 
    // Divide the rtt to get the one sided delay (assuming the delays are equal
    // on the way to the client and the way back).
