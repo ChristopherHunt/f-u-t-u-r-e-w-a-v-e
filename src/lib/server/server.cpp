@@ -10,7 +10,6 @@
 #include <unistd.h>           // gethostname
 #include <iostream>
 #include <string>
-#include <sstream>
 #include "network/network.hpp"
 #include "server/server.hpp"
 
@@ -189,7 +188,7 @@ void Server::handle_client_timing(ClientInfo& info) {
       // Move the sync_it to the next client and sync
       ++sync_it;
       if (sync_it == fd_to_client_info.end()) {
-         sync_it = fd_to_client_info.begin(); 
+         sync_it = fd_to_client_info.begin();
       }
    }
    // If we still need to do more sync trials to compute an avg. delay.

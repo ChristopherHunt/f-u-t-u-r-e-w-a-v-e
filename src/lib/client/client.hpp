@@ -5,6 +5,7 @@
 #include <sys/time.h>
 #include <deque>
 #include <string>
+#include <cstdlib>
 #include "network/network.hpp"
 #include "portmidi/include/portmidi.h"
 #include "portmidi/include/porttime.h"
@@ -38,6 +39,7 @@ class Client {
       long delay;                   // Simulated network delay
       long current_time;            // A variable to hold the current time.
       int midi_channel;             // Target midi channel to play out of
+      int client_alive;             // For simulating a dead client
 
       uint8_t buf[MAX_BUF_SIZE];    // Buffer used for message handling.
 
@@ -68,11 +70,20 @@ class Client {
       // Configures a fresh FD_SET that contains the server_sock.
       void config_fd_set();
 
+      // Set stdin fd to see if input from user
+      void config_fd_set_for_stdin();
+
+      // Select on incoming
+      int connection_ready(uint32_t timeout);
+
       // Handles the exit message from the server, closing the client.
       void handle_done();
 
       // Handles the setup of the client with the server.
       void handle_handshake();
+
+      // Handle input from stdin
+      void handle_stdin();
 
       // Parses the midi data sent to the client from the server.
       void queue_midi_data();
