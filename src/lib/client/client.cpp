@@ -97,17 +97,17 @@ void Client::handle_handshake() {
          case flag::HS_GOOD:
             // Start the midi timer
             Pm_Initialize();
-            fprintf(stderr, "Initialized!\n");
+            print_debug("Initialized!\n");
             Pt_Start(1, &process_midi, (void *)this); 
-            fprintf(stderr, "timer started!\n");
+            print_debug("timer started!\n");
 
             // Get the default midi device
             default_device_id = Pm_GetDefaultOutputDeviceID();
-            fprintf(stderr, "default_device_id: %d\n", default_device_id);
+            print_debug("default_device_id: %d\n", default_device_id);
 
             // Setup the output stream for playing midi.
             Pm_OpenOutput(&stream, default_device_id, NULL, 1, NULL, NULL, 0);
-            fprintf(stderr, "Opened stream!\n");
+            print_debug("Opened stream!\n");
 
             timeout_count = 0;
             send_handshake_fin();
@@ -170,18 +170,18 @@ void Client::handle_play() {
 }
 
 void Client::handle_sync() {
-   fprintf(stderr, "Client::handle_sync!\n");
+   print_debug("Client::handle_sync!\n");
    int bytes_sent;
 
    // Build the handshake fin packet
    midi_header->seq_num = seq_num;
    midi_header->flag = flag::SYNC_ACK;
 
-   fprintf(stderr, "responding with seq_num: %d\n", midi_header->seq_num);
+   print_debug("responding with seq_num: %d\n", midi_header->seq_num);
 
    // Send the handshake fin packet to the server.
    uint16_t packet_size = sizeof(Packet_Header);
-   bytes_sent = send_buf(server_sock, &server, buf, packet_size);
+   bytes_sent = send_buf_delayed(server_sock, &server, buf, packet_size, delay);
    ASSERT(bytes_sent == packet_size);
 }
 
@@ -233,6 +233,13 @@ int Client::recv_packet_into_buf(uint32_t packet_size) {
    return bytes_recv;
 }
 
+int Client::send_buf_delayed(int sock, sockaddr_in *remote, uint8_t *buf,
+   uint32_t buf_len, long delay) {
+   
+   usleep(delay * MICRO_TO_MILLISECONDS);
+   return send_buf(sock, remote, buf, buf_len);
+}
+
 void Client::send_handshake() {
    int bytes_sent;
 
@@ -243,14 +250,14 @@ void Client::send_handshake() {
 
    // Send the handshake packet to the server.
    uint16_t packet_size = sizeof(Handshake_Packet);
-   bytes_sent = send_buf(server_sock, &server, buf, packet_size);
+   bytes_sent = send_buf_delayed(server_sock, &server, buf, packet_size, delay);
    ASSERT(bytes_sent == packet_size);
 }
 
 void Client::send_handshake_fin() {
    int bytes_sent;
 
-   fprintf(stderr, "Client::send_handshake_fin!\n");
+   print_debug("Client::send_handshake_fin!\n");
    // Parse the handshake ack to get the seq number.
    Handshake_Packet *hs = (Handshake_Packet *)buf;
    ASSERT(hs->header.seq_num == 1);
@@ -262,18 +269,20 @@ void Client::send_handshake_fin() {
 
    // Send the handshake fin packet to the server.
    uint16_t packet_size = sizeof(Handshake_Packet);
-   bytes_sent = send_buf(server_sock, &server, buf, packet_size);
+   bytes_sent = send_buf_delayed(server_sock, &server, buf, packet_size, delay);
    ASSERT(bytes_sent == packet_size);
 }
 
 void Client::send_midi_ack() {
    int bytes_sent;
 
-   fprintf(stderr, "sending seq_num %d\n", seq_num);
+   print_debug("sending seq_num %d\n", seq_num);
+
    midi_ack.seq_num = seq_num;
    midi_ack.flag = flag::MIDI_ACK;
    uint16_t packet_size = sizeof(Handshake_Packet);
-   bytes_sent = send_buf(server_sock, &server, (uint8_t *)&midi_ack, packet_size);
+   bytes_sent = send_buf_delayed(server_sock, &server, (uint8_t *)&midi_ack,
+      packet_size, delay);
    ASSERT(bytes_sent == packet_size);
 }
 
@@ -312,7 +321,7 @@ void Client::twiddle() {
       flag::Packet_Flag flag;
       flag = (flag::Packet_Flag)midi_header->flag;
 
-      fprintf(stderr, "the server sent seq_num: %d\n", midi_header->seq_num);
+      print_debug("the server sent seq_num: %d\n", midi_header->seq_num);
 
       // This packet has to either be a handshake_fin packet or a sync_ack packet.
       switch (flag) {

@@ -8,8 +8,9 @@
 #include "portmidi/include/portmidi.h"
 #include "portmidi/include/porttime.h"
 
-#define MAX_TIMEOUTS 5
 #define INPUT_ARG_COUNT 4
+#define MAX_TIMEOUTS 5
+#define MICRO_TO_MILLISECONDS 1000
 
 namespace client {
    enum Client_State { HANDSHAKE, TWIDDLE, PLAY, DONE };
@@ -93,6 +94,12 @@ class Client {
       // seq_num to be 1 greater than that of the recv'd packet. Returns the
       // number of bytes received.
       int recv_packet_into_buf(uint32_t packet_size);
+
+      // Sends buf_len of buf to the client specified by sock and remote after
+      // sleeping for the delay number of milliseconds. Returns the number of
+      // bytes sent.
+      int send_buf_delayed(int sock, sockaddr_in *remote, uint8_t *buf,
+         uint32_t buf_len, long delay);
 
       // Assemble and send the handshake packet to the server.
       void send_handshake();

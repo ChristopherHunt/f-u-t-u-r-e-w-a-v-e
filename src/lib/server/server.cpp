@@ -21,19 +21,6 @@ Server::Server(int num_args, char **arg_list) {
       exit(1);
    }
 
-   // Overlay the midi header onto the buf for easy dereferencing later.
-   midi_header = (Packet_Header *)buf;
-   buf_offset = 0;
-
-   // No song is playing at startup.
-   song_is_playing = false;
-
-   // Setup main socket for the server to listen for clients on.
-   setup_udp_socket();
-
-   // Overlay a Handshake_Packet over the front of the buffer for future use.
-   hs = (Handshake_Packet *)buf;
-
    // TODO: Remove -- this is just to test playing music locally to troubleshoot
    // packets!
    //setup_music_locally();
@@ -75,15 +62,20 @@ void Server::config_fd_set_for_normal_traffic() {
    for (it = fd_to_client_info.begin(); it != fd_to_client_info.end(); ++it) {
       FD_SET(it->second.fd, &normal_fds);
    }
+
+   // Remove the priority client from the fd_set if a priority client exists
+   if (fd_to_client_info.size() > 0) {
+      FD_CLR(sync_it->first, &normal_fds);
+   }
 }
 
 void Server::config_fd_set_for_priority_traffic() {
    // Clear initial fd_set.
    FD_ZERO(&priority_fds);
 
-   // Add client socket fd to the FD list to listen for
-   if (priority_messages.size() > 0) {
-      FD_SET(priority_messages.front().fd, &priority_fds);
+   // Add the current priority client to the fd_set
+   if (fd_to_client_info.size() > 0) {
+      FD_SET(sync_it->first, &priority_fds);
    }
 }
 
@@ -105,7 +97,7 @@ int Server::connection_ready(fd_set fds) {
    set_timeval(0);
 
    // Just select on the world for now
-   int num_fds_available = select(FD_SETSIZE, &fds, NULL, NULL, &tv);
+   int num_fds_available = select(max_sock + 1, &fds, NULL, NULL, &tv);
    ASSERT(num_fds_available >= 0);
 
    return num_fds_available;
@@ -117,11 +109,12 @@ void Server::handle_abort() {
 }
 
 void Server::handle_client_packet(int fd) {
-   ASSERT(fd >= 0);
-   int bytes_recv;
-   long current_time;
-   long rtt;
-   uint32_t actual_seq_num;
+   /*
+      ASSERT(fd >= 0);
+      int bytes_recv;
+      long current_time = 0;
+      long rtt;
+      uint32_t actual_seq_num;
 
    // Get the current time
    get_current_time(&current_time);
@@ -129,26 +122,27 @@ void Server::handle_client_packet(int fd) {
    // Get a reference to this client's info
    ClientInfo *info = &fd_to_client_info[fd];
 
-   // Receive the message into the buffer
-   bytes_recv = recv_buf(fd, &info->addr, buf, MAX_BUF_SIZE);
-
    // Extract the packet's seq_num
    actual_seq_num = midi_header->seq_num;
-   fprintf(stderr, "Client responded with seq_num %d\n", midi_header->seq_num);
-   fprintf(stderr, "expected_seq_num %d\n", info->expected_seq_num);
-   
+   print_debug("Client responded with seq_num %d\n", midi_header->seq_num);
+   print_debug("expected_seq_num %d\n", info->expected_seq_num);
+
    // If the actual sequence number in the received packet is greater than the
    // expected_seq_num then we had packet loss (we will not concern
    // ourselves with reordering for now).
    if (actual_seq_num != info->expected_seq_num) {
-      // Drop all of the sequence number tracking for packets that came before
-      // the current packet we just received (because we assume those packets
-      // are lost).
-      while (info->expected_seq_num < actual_seq_num) {
-         info->packet_to_send_time.erase(info->expected_seq_num);
-         info->expected_seq_num += 2;
-      }
+   // Drop all of the sequence number tracking for packets that came before
+   // the current packet we just received (because we assume those packets
+   // are lost).
+   while (info->expected_seq_num < actual_seq_num) {
+   info->packet_to_send_time.erase(info->expected_seq_num);
+   info->expected_seq_num += 2;
    }
+   }
+
+   print_debug("info->packet_to_send_time[%d]: %lu\n", actual_seq_num,
+   info->packet_to_send_time[actual_seq_num]);
+   print_debug("current_time: %lu\n", current_time);
 
    // Determine the rtt for the packet.
    rtt = current_time - info->packet_to_send_time[actual_seq_num];
@@ -165,11 +159,12 @@ void Server::handle_client_packet(int fd) {
    // TODO: Remove!!!!
    print_state();
    //
+   */
 }
 
 // This function handles setting up the client's timing.
 void Server::handle_client_timing(ClientInfo& info) {
-   fprintf(stderr, "Server::handle_client_timing()!\n");
+   print_debug("Server::handle_client_timing()!\n");
    long current_time;
    long rtt;
 
@@ -179,6 +174,7 @@ void Server::handle_client_timing(ClientInfo& info) {
    // Get the difference between the current time and the previous time to
    // determine the rtt.
    rtt = current_time - info.last_msg_send_time;
+   fprintf(stderr, "rtt: %lu\n", rtt);
 
    // Divide the rtt to get the one sided delay (assuming the delays are equal
    // on the way to the client and the way back).
@@ -187,18 +183,15 @@ void Server::handle_client_timing(ClientInfo& info) {
    // If we have recv'd enough client sync messages to establish an avg. delay
    // for this client.
    if (info.delay_times.size() >= NUM_SYNC_TRIALS) {
-      fprintf(stderr, "Done syncing with client %d\n", info.fd);
+      print_debug("Done syncing with client %d\n", info.fd);
       // Compute the average delay for this client
       calc_delay(info);
 
-      // Remove the client from the priority_message_queue.
-      priority_messages.pop_front();
-
-      // Clear the delay_times vector for the client
-      info.delay_times.clear();
-
-      // Add the clinet to the fd_to_client_info mapping
-      fd_to_client_info[info.fd] = info;
+      // Move the sync_it to the next client and sync
+      ++sync_it;
+      if (sync_it == fd_to_client_info.end()) {
+         sync_it = fd_to_client_info.begin(); 
+      }
    }
    // If we still need to do more sync trials to compute an avg. delay.
    else {
@@ -236,22 +229,29 @@ void Server::handle_new_client() {
    // FIXME: This doesn't work because each client will be assigned a unique
    // port to communicate with the server on. So you would need to have the
    // client send some unique id in order to know who is who.
-   std::deque<ClientInfo>::iterator it;
-   for (it = priority_messages.begin(); it != priority_messages.end(); ++it) {
-      // If the client already has a stale entry in the priority message queue,
-      // drop that stale entry.
-      if (it->addr.sin_family == info.addr.sin_family &&
-            it->addr.sin_port == info.addr.sin_port) {
-         // Close the fd associated with this stale connection
-         close(it->fd);
+   /*
+      std::deque<ClientInfo *>::iterator it;
+      for (it = priority_messages.begin(); it != priority_messages.end(); ++it) {
+   // If the client already has a stale entry in the priority message queue,
+   // drop that stale entry.
+   if ((*it)->addr.sin_family == info.addr.sin_family &&
+   (*it)->addr.sin_port == info.addr.sin_port) {
+   // Close the fd associated with this stale connection
+   close((*it)->fd);
 
-         // Remove the stale connection from the priority message queue
-         priority_messages.erase(it);
-      }
+   // Remove the stale connection from the priority message queue
+   priority_messages.erase(it);
    }
+   }
+   */
 
    // Create a new socket to service this new client
    info.fd = socket(AF_INET, SOCK_DGRAM, 0);
+
+   // Update max_sock
+   if (info.fd > max_sock) {
+      max_sock = info.fd;
+   }
 
    // Update the client's sequence number
    info.seq_num = ++(hs->header.seq_num);
@@ -263,9 +263,6 @@ void Server::handle_new_client() {
    info.avg_delay = 0;
    info.last_msg_send_time = 0;
 
-   // Add the new client info to the priority deque
-   priority_messages.push_back(info);
-
    // Build response packet to client
    memset(buf, '\0', MAX_BUF_SIZE);
    Packet_Header *ph = (Packet_Header *)buf;
@@ -276,13 +273,31 @@ void Server::handle_new_client() {
    result = send_buf(info.fd, &info.addr, buf, sizeof(Packet_Header));
    ASSERT(result == sizeof(Packet_Header));
 
+   // Add the clinet to the fd_to_client_info mapping
+   fd_to_client_info[info.fd] = info;
+
+   // So we need to reset the iterator now that the underlying container
+   // changed and I realize that by shoving it back to the front it could
+   // "starve" some of the clients if we were flooded with connections, but
+   // we won't be and this should be fine.
+   sync_it = fd_to_client_info.begin();
+
    print_state();
 }
 
 void Server::handle_normal_msg() {
-   //fprintf(stderr, "Server::handle_normal_msg!\n");
-   for (int i = STDERR + 1; i <= FD_SETSIZE; ++i) {
+   print_debug("Server::handle_normal_msg!\n");
+   ClientInfo *info;
+   for (int i = STDERR + 1; i <= max_sock + 1; ++i) {
       if (FD_ISSET(i, &normal_fds)) {
+         // Pull out the client's info
+         info = &(fd_to_client_info[i]);
+
+         // Receive the message into the buffer
+         int bytes_recv = recv_buf(i, &info->addr, buf, MAX_BUF_SIZE);
+         ASSERT(bytes_recv > 0);
+
+         // Handle its contents
          handle_client_packet(i);
       }
    }
@@ -313,7 +328,7 @@ void Server::handle_parse_song() {
          // Start the timer with 1 millisecond resolution and creates a thread to call
          // the process_midi function every 1 millisecond.
          time_error = Pt_Start(1, &process_midi, (void *)this);
-        //  fprintf(stderr, "value time_error: %d\n", time_error);
+         //  fprintf(stderr, "value time_error: %d\n", time_error);
       }
       else {
          fprintf(stderr, "Midi song no good!\n");
@@ -395,36 +410,47 @@ void Server::handle_play_song() {
 void Server::handle_priority_msg() {
    int result;
    ClientInfo *info;
-   info = &(priority_messages.front());
 
-   result = recv_buf(info->fd, &info->addr, buf, sizeof(Packet_Header));
-   ASSERT(result == sizeof(Packet_Header));
+   print_debug("Server::handle_priority_msg!\n");
+   for (int i = STDERR + 1; i <= max_sock + 1; ++i) {
+      if (FD_ISSET(i, &priority_fds)) {
+         info = &(fd_to_client_info[i]);
 
-   // Update the client's info structure with the proper seq_num
-   info->seq_num = ++midi_header->seq_num;
+         result = recv_buf(info->fd, &info->addr, buf, sizeof(Packet_Header));
+         ASSERT(result == sizeof(Packet_Header));
 
-   // Update the client's expected_seq_num
-   info->expected_seq_num = info->seq_num + 1;
+         // Update the client's info structure with the proper seq_num
+         info->seq_num = ++midi_header->seq_num;
 
-   // Parse the packet
-   flag::Packet_Flag flag;
-   flag = (flag::Packet_Flag)midi_header->flag;
+         // Update the client's expected_seq_num
+         info->expected_seq_num = info->seq_num + 1;
 
-   // This packet has to either be a handshake_fin packet or a sync_ack packet.
-   switch (flag) {
-      case flag::HS_FIN:
-         fprintf(stderr, "Recv'd handshake_fin!\n");
-         send_sync_packet(*info);
-         break;
-      case flag::SYNC_ACK:
-         fprintf(stderr, "Recv'd sync_ack!\n");
-         handle_client_timing(*info);
-         break;
-      default:
-         fprintf(stderr, "handle_priority_message fell through!\n");
-         handle_abort();
-         break;
+         // Parse the packet
+         flag::Packet_Flag flag;
+         flag = (flag::Packet_Flag)midi_header->flag;
+
+         // This packet has to either be a handshake_fin packet or a sync_ack packet.
+         switch (flag) {
+            case flag::HS_FIN:
+               print_debug("Recv'd handshake_fin!\n");
+               send_sync_packet(*info);
+               break;
+            case flag::SYNC_ACK:
+               print_debug("Recv'd sync_ack!\n");
+               handle_client_timing(*info);
+               break;
+            case flag::MIDI_ACK:
+               print_debug("Recv'd midi_ack!\n");
+               handle_client_packet(i);
+               break;
+            default:
+               fprintf(stderr, "handle_priority_message fell through!\n");
+               handle_abort();
+               break;
+         }
+      }
    }
+
    print_state();
 }
 
@@ -457,7 +483,7 @@ void Server::handle_wait_for_input() {
    num_connections_available = connection_ready(normal_fds);
    ASSERT(num_connections_available >= 0);
    if (num_connections_available) {
-      fprintf(stderr, "stdin!\n");
+      print_debug("stdin!\n");
       handle_stdin();
    }
 
@@ -476,7 +502,6 @@ void Server::handle_wait_for_input() {
    num_connections_available = connection_ready(priority_fds);
    ASSERT(num_connections_available >= 0);
    if (num_connections_available) {
-      fprintf(stderr, "priority msg!\n");
       handle_priority_msg();
    }
 
@@ -485,7 +510,6 @@ void Server::handle_wait_for_input() {
    num_connections_available = connection_ready(normal_fds);
    ASSERT(num_connections_available >= 0);
    if (num_connections_available) {
-      fprintf(stderr, "normal msg!\n");
       handle_normal_msg();
    }
 
@@ -499,6 +523,22 @@ void Server::init() {
    next_client_id = 0;
    midi_timer = 0;
    memset(buf, '\0', MAX_BUF_SIZE);
+
+   // Overlay the midi header onto the buf for easy dereferencing later.
+   midi_header = (Packet_Header *)buf;
+   buf_offset = 0;
+
+   // No song is playing at startup.
+   song_is_playing = false;
+
+   // Setup main socket for the server to listen for clients on.
+   setup_udp_socket();
+
+   // Overlay a Handshake_Packet over the front of the buffer for future use.
+   hs = (Handshake_Packet *)buf;
+
+   // Set the sync iterator to the front of the empty clients map
+   sync_it = fd_to_client_info.begin();
 }
 
 int Server::open_target_file(std::string& target_filename) {
@@ -605,28 +645,17 @@ bool Server::parse_midi_input(){
 
 void Server::print_state() {
    ClientInfo info;
-   fprintf(stderr, "Server state:\n");
-   fprintf(stderr, "\tpriority_messages:\n");
-   for (int i = 0; i < priority_messages.size(); ++i) {
-      info = priority_messages[i];
-      fprintf(stderr, "\t\tfd:        %d\n", info.fd);
-      fprintf(stderr, "\t\tseq_num to send next:   %d\n", info.seq_num);
-      fprintf(stderr, "\t\texpected_seq_num to recv next:   %d\n", info.expected_seq_num);
-      fprintf(stderr, "\t\tavg_delay: %lu\n", info.avg_delay);
-      fprintf(stderr, "\t\tlast_send: %lu\n", info.last_msg_send_time);
-      fprintf(stderr, "\t\tdelay_times.size(): %lu\n", info.delay_times.size());
-      fprintf(stderr, "\n");
-   }
-   fprintf(stderr, "\tfd_to_client_info:\n");
+   print_debug("Server state:\n");
+   print_debug("\tfd_to_client_info:\n");
    std::unordered_map<int, ClientInfo>::iterator it;
    for (it = fd_to_client_info.begin(); it != fd_to_client_info.end(); ++it) {
       info = it->second;
-      fprintf(stderr, "\t\tfd:        %d\n", info.fd);
-      fprintf(stderr, "\t\tseq_num to send next:   %d\n", info.seq_num);
-      fprintf(stderr, "\t\texpected_seq_num to recv next:   %d\n", info.expected_seq_num);
-      fprintf(stderr, "\t\tavg_delay: %lu\n", info.avg_delay);
-      fprintf(stderr, "\t\tlast_send: %lu\n", info.last_msg_send_time);
-      fprintf(stderr, "\n");
+      print_debug("\t\tfd:        %d\n", info.fd);
+      print_debug("\t\tseq_num to send next:   %d\n", info.seq_num);
+      print_debug("\t\texpected_seq_num to recv next:   %d\n", info.expected_seq_num);
+      print_debug("\t\tavg_delay: %lu\n", info.avg_delay);
+      print_debug("\t\tlast_send: %lu\n", info.last_msg_send_time);
+      print_debug("\n");
    }
 }
 
@@ -655,13 +684,16 @@ int Server::send_midi_msg(ClientInfo *info) {
 
    // Increment the seq_num so we know what the next packet should go out with
    info->seq_num += 2;
-   fprintf(stderr, "setting client %d seq_num to %d\n", info->fd, info->seq_num);
+   print_debug("setting client %d seq_num to %d\n", info->fd, info->seq_num);
 
    return bytes_sent;
 }
 
 void Server::send_sync_packet(ClientInfo& info) {
    int result;
+
+   // Clear out the delay_times vector so we start fresh
+   info.delay_times.clear();
 
    // Rebuild the packet to the client
    memset(buf, '\0', MAX_BUF_SIZE);
@@ -688,6 +720,8 @@ void Server::setup_udp_socket() {
    // Create the main socket the server will listen for clients on.
    server_sock = socket(AF_INET, SOCK_DGRAM, 0);
    ASSERT(server_sock >= 0);
+
+   max_sock = server_sock;
 
    local.sin_family = AF_INET;                  // IPv4
    local.sin_addr.s_addr = htonl(INADDR_ANY);   // Match any IP
@@ -723,7 +757,7 @@ void process_midi(PtTimestamp timestamp, void *userData) {
    // Lookup the time and populate the server's clock
    ((Server *)userData)->midi_timer = Pt_Time();
 
-  //  fprintf(stderr, "value pt_time: %d\n", ((Server *)userData)->midi_timer);
+   //  fprintf(stderr, "value pt_time: %d\n", ((Server *)userData)->midi_timer);
 }
 
 void Server::wait_for_handshake() {
@@ -756,11 +790,11 @@ void Server::play_music_locally(uint8_t *buf, int offset) {
 
    // TODO -- REMOVE
    uint8_t *ptr = (uint8_t *)my_event;
-   fprintf(stderr, "Server::play_music_locally\n");
+   print_debug("Server::play_music_locally\n");
    for (int j = 0; j < SIZEOF_MIDI_EVENT; ++j) {
-      fprintf(stderr, "%02x ", ptr[j]);
+      print_debug("%02x ", ptr[j]);
    }
-   fprintf(stderr, "\n");
+   print_debug("\n");
    //
 
    // Send this midi event to output
@@ -789,7 +823,7 @@ void Server::ready_go() {
             handle_done();
             break;
          default:
-           handle_abort();
+            handle_abort();
             break;
       }
    }

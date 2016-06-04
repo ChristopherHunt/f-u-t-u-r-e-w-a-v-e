@@ -77,4 +77,6 @@ int recv_buf(int sock, sockaddr_in *remote, uint8_t *buf, uint32_t buf_len);
 
 void get_current_time(long *milliseconds);
 
+void print_debug(const char *format, ...);
+
 #endif

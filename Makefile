@@ -62,7 +62,7 @@ dirs:
 	mkdir -p $(log_dir)
 
 debug:
-	$(eval LDFLAGS += -g)
+	$(eval LDFLAGS += -g -D DEBUG)
 	$(MAKE) build
 
 build: clean dirs $(libraries) $(apps) $(tests)

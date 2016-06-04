@@ -41,6 +41,7 @@ class Server {
       uint32_t port;              // The server's port.
 
       int server_sock;            // Server's socket fd.
+      int max_sock;               // Maximum server socket number.
       sockaddr_in local;          // Local socket config.
       fd_set normal_fds;          // Set of fds to for normal messages.
       fd_set priority_fds;        // Set of fds for priority messages.
@@ -55,19 +56,20 @@ class Server {
       Packet_Header *midi_header; // Overlay on top of the buffer.
       int next_client_id;         // The id to be assigned to the next client.
       bool song_is_playing;       // Tells the state machine we are playing a song
+
       server::State state;        // Current state of the Server's state machine.
       MidiFile midifile;          // Midifile object to parse midi data
       PtError time_error;         // Time error
 
-      // Deque of ClientInfo with high priority. This deque will be checked
-      // before all other client messages to handle high priority packets.
-      std::deque<ClientInfo> priority_messages;
-
-      // Mapping of tracks to their queue of events to be played.
-      std::unordered_map<int, std::deque<MyPmEvent> > track_queues;
+      // Iterator which decides which client to try and sync with at any given
+      // time.
+      std::unordered_map<int, ClientInfo>::iterator sync_it;
 
       // Mapping of client socket fd to the client's ClientInfo struct.
       std::unordered_map<int, ClientInfo> fd_to_client_info;
+
+      // Mapping of tracks to their queue of events to be played.
+      std::unordered_map<int, std::deque<MyPmEvent> > track_queues;
 
       // Appends the event to the buffer, incrementing the number of midi
       // messages in the buffer's midi_header.
