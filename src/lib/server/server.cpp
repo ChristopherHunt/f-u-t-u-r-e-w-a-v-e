@@ -169,7 +169,6 @@ void Server::handle_client_packet(int fd) {
 // This function handles setting up the client's timing.
 void Server::handle_client_timing(ClientInfo& info) {
    print_debug("Server::handle_client_timing()!\n");
-   long current_time;
    long rtt;
 
    // Get the current time from the server's clock
@@ -184,6 +183,7 @@ void Server::handle_client_timing(ClientInfo& info) {
    //info.delay_times.push_back(rtt / 2);
    info.session_delay += rtt / 2;
    ++info.session_delay_counter;
+   ++info.sync_counter;
 
    // If we have recv'd enough client sync messages to establish an avg. delay
    // for this client.
@@ -191,7 +191,7 @@ void Server::handle_client_timing(ClientInfo& info) {
       print_debug("Done syncing with client %d\n", info.fd);
 
       // Condense the temporary rtt average for this sync set to 1 avg value.
-      info.delay_times.push_back(info.session_delay / NUM_SYNC_TRIALS);
+      info.delay_times.push_back(info.session_delay / info.sync_counter);
       info.session_delay = 0;
       info.session_delay_counter = 0;
 
@@ -296,6 +296,10 @@ void Server::handle_new_client() {
    info.last_msg_send_time = 0;
    info.session_delay = 0;
    info.session_delay_counter = 0;
+   info.sync_counter = 0;
+
+   // Mark the client as active
+   info.active = true;
 
    // Build response packet to client
    memset(buf, '\0', MAX_BUF_SIZE);
@@ -499,6 +503,48 @@ void Server::handle_song_fin() {
    exit(1);
 }
 
+void Server::handle_sync_timeout(ClientInfo *info) {
+   // Increment the number of times we've tried to sync with this client
+   ++info->session_delay_counter;
+
+   // Check to see if this client has timed out fully
+   if (info->session_delay_counter >= NUM_SYNC_TRIALS) {
+      // Mark the client as inactive
+      info->active = false;
+
+      // Zero the client's sync bookkeeping
+      info->session_delay = 0;
+      info->session_delay_counter = 0;
+      info->sync_counter = 0;
+
+      ClientInfo *min_client;
+      int min_client_tracks;
+      std::vector<int>::iterator track_it;
+      std::unordered_map<int, ClientInfo>::iterator client_it;
+
+      // Redistribute the client's tracks to other active clients
+      for (track_it = info->tracks.begin(); track_it != info->tracks.end();
+         ++track_it) {
+
+         // Reset to large number per iteration
+         min_client_tracks = 1000;
+
+         // Find the client with the least number of tracks 
+         for (client_it = fd_to_client_info.begin();
+            client_it != fd_to_client_info.end(); ++client_it) {
+            if (client_it->second.tracks.size() < min_client_tracks) {
+               min_client_tracks = client_it->second.tracks.size();
+               min_client = &(client_it->second);
+            }
+         }
+
+         // Push the current track from the inactive client onto the client with
+         // the minimum number of tracks.
+         min_client->tracks.push_back(*track_it);
+      }
+   }
+}
+
 void Server::handle_stdin() {
    std::string user_input;
    getline(std::cin, user_input);
@@ -553,8 +599,17 @@ void Server::handle_wait_for_input() {
       handle_normal_msg();
    }
 
+   // If the song is playing, fall into the play_song function to send more
+   // notes to the clients.
    if (song_is_playing) {
       state = server::PLAY_SONG;
+   }
+
+   // Check the timeout on the current syncing client and act apprioriately
+   get_current_time(&current_time);
+   if (sync_client->last_msg_send_time +
+      MAX_SYNC_TIMEOUT * sync_client->avg_delay < current_time) {
+      handle_sync_timeout(sync_client);
    }
 }
 
@@ -708,7 +763,6 @@ int Server::send_midi_msg(ClientInfo *info) {
    ASSERT(midi_header->flag == flag::MIDI);
 
    // Get the current server wall-clock time.
-   long current_time;
    get_current_time(&current_time);
 
    // Store the seq_num to send time mapping for this message. Note that we are

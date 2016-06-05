@@ -15,15 +15,22 @@
 #include "portmidi/include/portmidi.h"
 #include "portmidi/include/porttime.h"
 
-#define NUM_SYNC_TRIALS 3     // Number of times to sync with a client to
+#define NUM_SYNC_TRIALS   3   // Number of times to sync with a client to
                               // established an avg. delay profile.
 
-#define NUM_DELAY_SAMPLES 3  // Number of delay times each client keeps track
+#define MAX_SYNC_TIMEOUT  3   // The number of times the client tries to sync
+                              // with a client before declaring the client
+                              // inactive 
+
+#define NUM_DELAY_SAMPLES 3   // Number of delay times each client keeps track
                               // of when computing average delay.
 
 typedef struct ClientInfo {
    // Client's socket fd
    int fd;
+
+   // Tells the server if this client is currently active
+   bool active;
 
    // Client's socket address information
    sockaddr_in addr;
@@ -47,6 +54,9 @@ typedef struct ClientInfo {
    // A counter to determine how many times to send sync packets per sync
    // session.
    int session_delay_counter;
+
+   // The number of successful syncs the client has had this go around.
+   int sync_counter;
 
    // Container of sync times which can be averaged.
    std::deque<long> delay_times;
@@ -89,6 +99,7 @@ class Server {
       MidiFile midifile;          // Midifile object to parse midi data
       PtError time_error;         // Time error
       long max_client_delay;      // The current max delay from any client
+      long current_time;          // Variable to hold the current time
 
       ClientInfo *sync_client;    // Client that is currently being synced.
 
@@ -161,6 +172,9 @@ class Server {
 
       // Handle input from the user on stdin.
       void handle_stdin();
+
+      // Handles the case where a client misses its sync window.
+      void handle_sync_timeout(ClientInfo *info);
 
       // Handles the state where the client is waiting for an event to occur
       // (either a midi event is ready to be sent or a client has responded
