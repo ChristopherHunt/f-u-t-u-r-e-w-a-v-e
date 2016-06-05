@@ -26,7 +26,7 @@ Client::Client(int num_args, char **arg_list) {
    }
 
    // Initialize all variables needed by the client.
-   init()
+   init();
 
    // Drop into the client state machine.
    ready_go();
