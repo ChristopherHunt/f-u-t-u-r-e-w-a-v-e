@@ -607,7 +607,7 @@ void Server::handle_wait_for_input() {
 
    // Check the timeout on the current syncing client and act apprioriately
    get_current_time(&current_time);
-   if (sync_client->last_msg_send_time +
+   if (sync_client != NULL && sync_client->last_msg_send_time +
       MAX_SYNC_TIMEOUT * sync_client->avg_delay < current_time) {
       handle_sync_timeout(sync_client);
    }
@@ -625,6 +625,9 @@ void Server::init() {
 
    // No song is playing at startup.
    song_is_playing = false;
+
+   // Set the initial sync_client pointer to NULL
+   sync_client = NULL;
 
    // Setup main socket for the server to listen for clients on.
    setup_udp_socket();
