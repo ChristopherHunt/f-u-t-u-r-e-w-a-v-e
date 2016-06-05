@@ -62,6 +62,9 @@ class Client {
 
       std::deque<std::pair<long, uint32_t> > queued_syncs;
 
+      // Clear all queues for the client
+      void clear_queues();
+
       // Returns true if there's a response ready for receiving from the server.
       int check_for_response(uint32_t timeout);
 

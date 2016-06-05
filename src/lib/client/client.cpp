@@ -19,16 +19,15 @@ enum ParseArgs {MIDI_CHANNEL, DELAY, REMOTE_MACHINE, REMOTE_PORT};
 
 Client::Client(int num_args, char **arg_list) {
 
-   queued_acks.clear();
-   queued_events.clear();
-   queued_syncs.clear();
-
    // Ensure that command line arguments are good.
    if (!parse_inputs(num_args, arg_list)) {
       print_usage();
       exit(1);
    }
 
+   // clear all the queues
+   clear_queues();
+   
    // Initialize all variables needed by the client.
    init();
 
@@ -37,6 +36,12 @@ Client::Client(int num_args, char **arg_list) {
 }
 
 Client::~Client() {
+}
+
+void Client::clear_queues() {
+   queued_acks.clear();
+   queued_events.clear();
+   queued_syncs.clear();
 }
 
 void Client::config_fd_set_for_stdin() {
@@ -175,8 +180,7 @@ void Client::handle_stdin() {
    } else if (token.compare("stop") == 0) {
      fprintf(stderr, "killing the client\n");
      client_alive = 0;
-     queued_events.clear();
-     queued_acks.clear();
+     clear_queues();
    } else {
      int temp_delay = strtol(token.c_str(), &endptr, 10);
      if (temp_delay > -1) {
