@@ -417,7 +417,7 @@ void Server::handle_play_song() {
                setup_midi_msg(client);
 
                // If any of the queues have events that need to be sent
-               while (track_deque->size() && event.timestamp <= midi_timer) {
+               while (track_deque->size() && (event.timestamp + (max_client_delay - client_it->second.avg_delay)) <= midi_timer) {
                   // Pull the midi message out of the PmEvent
                   memcpy(message, event.message, 3 * sizeof(uint8_t));
 
