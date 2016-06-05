@@ -36,6 +36,10 @@ Client::Client(int num_args, char **arg_list) {
    // Clear buffer
    memset(buf, '\0', MAX_BUF_SIZE);
 
+   queued_acks.clear();
+   queued_events.clear();
+   queued_syncs.clear();
+
    // Ensure that command line arguments are good.
    if (!parse_inputs(num_args, arg_list)) {
       print_usage();
@@ -203,6 +207,9 @@ void Client::send_sync_ack(uint32_t packet_seq_num) {
    uint16_t packet_size = sizeof(Packet_Header);
    bytes_sent = send_buf(server_sock, &server, buf, packet_size);
    ASSERT(bytes_sent == packet_size);
+
+   // Pop this sync message from the deque.
+   queued_syncs.pop_front();
 }
 
 flag::Packet_Flag Client::parse_handshake_ack() {
@@ -287,14 +294,12 @@ void Client::send_handshake_fin() {
 }
 
 void Client::queue_midi_ack(uint32_t packet_seq_num) {
-   fprintf(stderr, "queue_midi_ack!\n");
    get_current_time(&current_time);
 
    queued_acks.push_back(std::make_pair(current_time + delay, packet_seq_num));
 }
 
 void Client::send_midi_ack(uint32_t packet_seq_num) {
-   fprintf(stderr, "send_midi_ack\n");
    int bytes_sent;
 
    print_debug("sending seq_num %d\n", seq_num);
@@ -376,6 +381,7 @@ void Client::twiddle() {
    get_current_time(&current_time);
    // Check to see if we need to ack any packets
    if (queued_acks.size() > 0 && queued_acks.front().first < current_time) {
+
       // Send the ack
       send_midi_ack(queued_acks.front().second);
    }

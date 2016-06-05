@@ -90,6 +90,8 @@ class Server {
       PtError time_error;         // Time error
       long max_client_delay;      // The current max delay from any client
 
+      ClientInfo *sync_client;    // Client that is currently being synced.
+
       // Iterator which decides which client to try and sync with at any given
       // time.
       std::unordered_map<int, ClientInfo>::iterator sync_it;
