@@ -10,6 +10,7 @@
 #include <unistd.h>           // gethostname
 #include <iostream>
 #include <string>
+#include <algorithm>
 #include "network/network.hpp"
 #include "server/server.hpp"
 
@@ -199,6 +200,30 @@ void Server::handle_client_timing(ClientInfo& info) {
       // Compute the average delay for this client
       calc_delay(info);
 
+      if (info.active == false){
+        // for every track in client_to_track
+        std::vector<int>::iterator it;
+        std::vector<int> * tracks;
+        tracks = &(client_to_track[info.fd]);
+        std::unordered_map<int, ClientInfo>::iterator client_it;
+
+        //vec.erase(std::remove(vec.begin(), vec.end(), 8), vec.end());
+        for (it = tracks->begin(); it != tracks->end(); ++it) {
+          // search all other clients, remove from list
+          for (client_it = fd_to_client_info.begin(); client_it != fd_to_client_info.end(); ++client_it){
+            client_it->second.tracks.erase(std::remove(client_it->second.tracks.begin(), client_it->second.tracks.end(), *it), client_it->second.tracks.end());
+          }
+        }
+
+
+        // tell all other people that have my tracks to drop them from their
+        // tracks list
+
+      }
+
+      // if client is active,
+        // then pull back tracks back into client and remark the client as active
+
       // Increment sync_it and check delays of all clients as needed
       sync_next();
 
@@ -352,6 +377,7 @@ void Server::handle_parse_song() {
 }
 
 void Server::handle_play_song() {
+  //  fprintf(stderr, "handle_play_song\n");
    MyPmEvent event;
    MyPmMessage message;
 
@@ -503,11 +529,11 @@ void Server::handle_sync_timeout(ClientInfo *info) {
          // Reset to large number per iteration
          min_client_tracks = 1000;
 
-         // Find the client with the least number of tracks 
+         // Find the client with the least number of tracks
          for (client_it = fd_to_client_info.begin();
                client_it != fd_to_client_info.end(); ++client_it) {
             // Only look at clients that are active
-            if (client_it->second.active == true && 
+            if (client_it->second.active == true &&
                   client_it->second.tracks.size() < min_client_tracks) {
 
                min_client_tracks = client_it->second.tracks.size();
@@ -721,6 +747,9 @@ bool Server::parse_midi_input(){
 
       // Assign this track's handle to the next client in round robin fashion
       client_it->second.tracks.push_back(track);
+
+      // Add track to appropriate client
+      client_to_track[client_it->second.fd].push_back(track);
 
       // Increment the client iterator to the next client in the collection
       ++client_it;

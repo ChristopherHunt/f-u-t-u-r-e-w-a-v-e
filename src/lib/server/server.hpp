@@ -20,7 +20,7 @@
 
 #define MAX_SYNC_TIMEOUT  3   // The number of times the client tries to sync
 // with a client before declaring the client
-// inactive 
+// inactive
 
 #define NUM_DELAY_SAMPLES 3   // Number of delay times each client keeps track
 // of when computing average delay.
@@ -167,6 +167,10 @@ class Server {
 
       // Mapping of tracks to their queue of events to be played.
       std::unordered_map<int, std::deque<MyPmEvent> > track_queues;
+
+      // Records the intial track to mappings, used for track recovery when
+      // client crashes.
+      std::unordered_map<int, std::vector<int> > client_to_track;
 
       // Appends the event to the buffer, incrementing the number of midi
       // messages in the buffer's midi_header.
