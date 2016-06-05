@@ -5,6 +5,7 @@
 #include <sys/time.h>
 #include <deque>
 #include <string>
+#include <cstdlib>
 #include "network/network.hpp"
 #include "portmidi/include/portmidi.h"
 #include "portmidi/include/porttime.h"
@@ -38,6 +39,7 @@ class Client {
       long delay;                   // Simulated network delay
       long current_time;            // A variable to hold the current time.
       int midi_channel;             // Target midi channel to play out of
+      int client_alive;             // For simulating a dead client
 
       uint8_t buf[MAX_BUF_SIZE];    // Buffer used for message handling.
 
@@ -58,6 +60,11 @@ class Client {
       // return trip).
       std::deque<std::pair<long, uint32_t> > queued_acks;
 
+      std::deque<std::pair<long, uint32_t> > queued_syncs;
+
+      // Clear all queues for the client
+      void clear_queues();
+
       // Returns true if there's a response ready for receiving from the server.
       int check_for_response(uint32_t timeout);
 
@@ -68,11 +75,23 @@ class Client {
       // Configures a fresh FD_SET that contains the server_sock.
       void config_fd_set();
 
+      // Set stdin fd to see if input from user
+      void config_fd_set_for_stdin();
+
+      // Select on incoming
+      int connection_ready(uint32_t timeout);
+
       // Handles the exit message from the server, closing the client.
       void handle_done();
 
       // Handles the setup of the client with the server.
       void handle_handshake();
+
+      // Handle input from stdin
+      void handle_stdin();
+
+      // Initialize all values needed by the client
+      void init();
 
       // Parses the midi data sent to the client from the server.
       void queue_midi_data();
@@ -81,7 +100,7 @@ class Client {
       void handle_play();
 
       // Handles sync messages between the client and the server.
-      void handle_sync();
+      void queue_sync();
 
       // Parses a handshake ack, returning its flag.
       flag::Packet_Flag parse_handshake_ack();
@@ -114,12 +133,6 @@ class Client {
       // number of bytes received.
       int recv_packet_into_buf(uint32_t packet_size);
 
-      // Sends buf_len of buf to the client specified by sock and remote after
-      // sleeping for the delay number of milliseconds. Returns the number of
-      // bytes sent.
-      int send_buf_delayed(int sock, sockaddr_in *remote, uint8_t *buf,
-         uint32_t buf_len, long delay);
-
       // Assemble and send the handshake packet to the server.
       void send_handshake();
 
@@ -130,6 +143,10 @@ class Client {
       // Increments the sequence number and sends an ack to the server for a
       // midi message.
       void send_midi_ack(uint32_t packet_seq_num);
+
+      // Sends a sync message to the server after delay amount of time to
+      // simulate latency in the network.
+      void send_sync_ack(uint32_t packet_seq_num);
 
       // Sets tv to have timeout seconds.
       void set_timeval(uint32_t timeout);

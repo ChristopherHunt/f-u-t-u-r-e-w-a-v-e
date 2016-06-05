@@ -18,29 +18,18 @@
 enum ParseArgs {MIDI_CHANNEL, DELAY, REMOTE_MACHINE, REMOTE_PORT};
 
 Client::Client(int num_args, char **arg_list) {
-   // Set sequence number to 0 since we are just starting.
-   seq_num = 0;
-
-   // Initialize the timeout count to zero for connection attempts
-   timeout_count = 0;
-
-   // Put object into the HANDSHAKE state.
-   state = client::HANDSHAKE;
-
-   // Have the midi_header overlay the buf.
-   midi_header = (Packet_Header *)buf;
-
-   // Clear the midi_ack's unneeded fields to avoid printout confusion.
-   midi_ack.num_midi_events = 0;
-
-   // Clear buffer
-   memset(buf, '\0', MAX_BUF_SIZE);
 
    // Ensure that command line arguments are good.
    if (!parse_inputs(num_args, arg_list)) {
       print_usage();
       exit(1);
    }
+
+   // clear all the queues
+   clear_queues();
+   
+   // Initialize all variables needed by the client.
+   init();
 
    // Drop into the client state machine.
    ready_go();
@@ -49,13 +38,51 @@ Client::Client(int num_args, char **arg_list) {
 Client::~Client() {
 }
 
-int Client::check_for_response(uint32_t timeout) {
-   config_fd_set();
-   set_timeval(timeout);
+void Client::clear_queues() {
+   queued_acks.clear();
+   queued_events.clear();
+   queued_syncs.clear();
+}
 
-   //int num_fds_available = selectMod(server_sock + 1, &rdfds, NULL, NULL, &tv);
-   int num_fds_available = select(server_sock + 1, &rdfds, NULL, NULL, &tv);
-   ASSERT(num_fds_available >= 0);
+void Client::config_fd_set_for_stdin() {
+   // Clear initial fd_set.
+   FD_ZERO(&rdfds);
+
+   // Add STDIN to the set of fds to check
+   FD_SET(STDIN, &rdfds);
+}
+
+int Client::connection_ready(uint32_t timeout) {
+    set_timeval(timeout);
+
+    //int num_fds_available = selectMod(server_sock + 1, &rdfds, NULL, NULL, &tv);
+    int num_fds_available = select(server_sock + 1, &rdfds, NULL, NULL, &tv);
+    ASSERT(num_fds_available >= 0);
+
+    return num_fds_available;
+}
+
+int Client::check_for_response(uint32_t timeout) {
+    int num_fds_available;
+    int handle_data = 1;
+
+    // Select on stdin to see if the user wants to do something
+    config_fd_set_for_stdin();
+    num_fds_available = connection_ready(0);
+    ASSERT(num_fds_available >= 0);
+    if (num_fds_available) {
+       print_debug("handling stdin input!\n");
+       handle_stdin();
+       handle_data = 0;
+       num_fds_available = 0;
+    }
+
+    if (handle_data) {
+      // Select on fdS to see if there is midi data
+       config_fd_set();
+       num_fds_available = connection_ready(timeout);
+       ASSERT(num_fds_available >= 0);
+    }
 
    return num_fds_available;
 }
@@ -76,10 +103,9 @@ void Client::config_fd_set() {
 }
 
 void Client::handle_done() {
-   fprintf(stderr, "No server found, exiting!\n");
+   fprintf(stderr, "Done state, exiting!\n");
    exit(1);
 }
-
 
 void Client::handle_handshake() {
    // Setup main socket for the client to connect to the server on.
@@ -88,7 +114,7 @@ void Client::handle_handshake() {
    // Send handshake to the server.
    send_handshake();
 
-   if (check_for_response(1)) {
+   if (check_for_response(1) && client_alive) {
       // Obtain server's response
       recv_packet_into_buf(sizeof(Handshake_Packet));
 
@@ -98,7 +124,7 @@ void Client::handle_handshake() {
             // Start the midi timer
             Pm_Initialize();
             print_debug("Initialized!\n");
-            Pt_Start(1, &process_midi, (void *)this); 
+            Pt_Start(1, &process_midi, (void *)this);
             print_debug("timer started!\n");
 
             // Get the default midi device
@@ -136,6 +162,58 @@ void Client::handle_handshake() {
    }
 }
 
+void Client::handle_stdin() {
+   std::string user_input;
+   getline(std::cin, user_input);
+
+   std::istringstream iss(user_input);
+
+   std::string token;
+   iss >> token;
+
+   // for conversion string to int
+   char *endptr;
+
+   if (token.compare("start") == 0) {
+     fprintf(stderr, "restarting the client\n");
+     client_alive = 1;
+   } else if (token.compare("stop") == 0) {
+     fprintf(stderr, "killing the client\n");
+     client_alive = 0;
+     clear_queues();
+   } else {
+     int temp_delay = strtol(token.c_str(), &endptr, 10);
+     if (temp_delay > -1) {
+       delay = temp_delay;
+       fprintf(stderr, "changing latency to %d\n", delay);
+     }
+   }
+
+}
+
+void Client::init() {
+  // Set client_alive to 1 to simulate an active client.
+  client_alive = 1;
+
+  // Set sequence number to 0 since we are just starting.
+  seq_num = 0;
+
+  // Initialize the timeout count to zero for connection attempts
+  timeout_count = 0;
+
+  // Put object into the HANDSHAKE state.
+  state = client::HANDSHAKE;
+
+  // Have the midi_header overlay the buf.
+  midi_header = (Packet_Header *)buf;
+
+  // Clear the midi_ack's unneeded fields to avoid printout confusion.
+  midi_ack.num_midi_events = 0;
+
+  // Clear buffer
+  memset(buf, '\0', MAX_BUF_SIZE);
+}
+
 void Client::queue_midi_data() {
    int buf_offset = sizeof(Packet_Header);
    uint8_t num_midi_events = midi_header->num_midi_events;
@@ -144,7 +222,7 @@ void Client::queue_midi_data() {
 
    // Loop through all midi events
    for (int i = 0; i < num_midi_events; ++i) {
-      // Pull out each midi message from the buffer 
+      // Pull out each midi message from the buffer
       my_event = (MyPmEvent *)(buf + buf_offset);
 
       // Add the message to the queue along with its timestamp.
@@ -165,9 +243,9 @@ void Client::play_midi_data() {
 
       // Make a message object to wrap this midi message
       message = Pm_Message(my_event->message[0], my_event->message[1],
-            my_event->message[2]); 
+            my_event->message[2]);
 
-      // Wrap the message and its timestamp in a midi event 
+      // Wrap the message and its timestamp in a midi event
       event.message = message;
       event.timestamp = my_event->timestamp;
 
@@ -184,20 +262,28 @@ void Client::handle_play() {
    ASSERT(FALSE);
 }
 
-void Client::handle_sync() {
-   print_debug("Client::handle_sync!\n");
+void Client::queue_sync() {
+   print_debug("Client::queue_sync!\n");
+   get_current_time(&current_time);
+   queued_syncs.push_back(std::make_pair(current_time + delay, seq_num));
+}
+
+void Client::send_sync_ack(uint32_t packet_seq_num) {
    int bytes_sent;
 
    // Build the handshake fin packet
-   midi_header->seq_num = seq_num;
+   midi_header->seq_num = packet_seq_num;
    midi_header->flag = flag::SYNC_ACK;
 
    print_debug("responding with seq_num: %d\n", midi_header->seq_num);
 
    // Send the handshake fin packet to the server.
    uint16_t packet_size = sizeof(Packet_Header);
-   bytes_sent = send_buf_delayed(server_sock, &server, buf, packet_size, delay);
+   bytes_sent = send_buf(server_sock, &server, buf, packet_size);
    ASSERT(bytes_sent == packet_size);
+
+   // Pop this sync message from the deque.
+   queued_syncs.pop_front();
 }
 
 flag::Packet_Flag Client::parse_handshake_ack() {
@@ -218,20 +304,20 @@ bool Client::parse_inputs(int num_args, char **arg_list) {
    if (endptr == arg_list[MIDI_CHANNEL] || midi_channel < 0) {
       printf("Invalid midi channel: '%s'\n", arg_list[MIDI_CHANNEL]);
       printf("Midi channel number must be 0 or greater.\n");
-      return false; 
+      return false;
    }
 
    delay = strtol(arg_list[DELAY], &endptr, 10);
    if (endptr == arg_list[DELAY] || delay < 0) {
       printf("Invalid delay: '%s'\n", arg_list[DELAY]);
       printf("Delay must be 0 or greater.\n");
-      return false; 
+      return false;
    }
 
    server_port = (uint32_t)strtol(arg_list[REMOTE_PORT], &endptr, 10);
    if (endptr == arg_list[REMOTE_PORT]) {
       printf("Invalid server port: '%s'\n", arg_list[REMOTE_PORT]);
-      return false; 
+      return false;
    }
 
    return true;
@@ -248,12 +334,6 @@ int Client::recv_packet_into_buf(uint32_t packet_size) {
    return bytes_recv;
 }
 
-int Client::send_buf_delayed(int sock, sockaddr_in *remote, uint8_t *buf,
-      uint32_t buf_len, long delay) {
-
-   return send_buf(sock, remote, buf, buf_len);
-}
-
 void Client::send_handshake() {
    int bytes_sent;
 
@@ -264,7 +344,7 @@ void Client::send_handshake() {
 
    // Send the handshake packet to the server.
    uint16_t packet_size = sizeof(Handshake_Packet);
-   bytes_sent = send_buf_delayed(server_sock, &server, buf, packet_size, delay);
+   bytes_sent = send_buf(server_sock, &server, buf, packet_size);
    ASSERT(bytes_sent == packet_size);
 }
 
@@ -283,19 +363,17 @@ void Client::send_handshake_fin() {
 
    // Send the handshake fin packet to the server.
    uint16_t packet_size = sizeof(Handshake_Packet);
-   bytes_sent = send_buf_delayed(server_sock, &server, buf, packet_size, delay);
+   bytes_sent = send_buf(server_sock, &server, buf, packet_size);
    ASSERT(bytes_sent == packet_size);
 }
 
 void Client::queue_midi_ack(uint32_t packet_seq_num) {
-   fprintf(stderr, "queue_midi_ack!\n");
    get_current_time(&current_time);
 
    queued_acks.push_back(std::make_pair(current_time + delay, packet_seq_num));
 }
 
 void Client::send_midi_ack(uint32_t packet_seq_num) {
-   fprintf(stderr, "send_midi_ack\n");
    int bytes_sent;
 
    print_debug("sending seq_num %d\n", seq_num);
@@ -304,8 +382,7 @@ void Client::send_midi_ack(uint32_t packet_seq_num) {
    midi_ack.seq_num = packet_seq_num;
    midi_ack.flag = flag::MIDI_ACK;
    uint16_t packet_size = sizeof(Handshake_Packet);
-   bytes_sent = send_buf_delayed(server_sock, &server, (uint8_t *)&midi_ack,
-         packet_size, delay);
+   bytes_sent = send_buf(server_sock, &server, (uint8_t *)&midi_ack, packet_size);
    ASSERT(bytes_sent == packet_size);
 
    // Remove the bookkeeping from the queue
@@ -334,12 +411,12 @@ void Client::setup_udp_socket() {
 
    memcpy(&server.sin_addr, hp->h_addr, hp->h_length);
    server.sin_family = AF_INET;           // IPv4
-   server.sin_port = htons(server_port);  // Use specified port                
+   server.sin_port = htons(server_port);  // Use specified port
 }
 
 void Client::twiddle() {
    // Wait for packet
-   if (check_for_response(0)) {
+   if (check_for_response(0) && client_alive) {
       // Recive the packet into the buffer
       recv_packet_into_buf(MAX_BUF_SIZE);
 
@@ -352,7 +429,7 @@ void Client::twiddle() {
       // This packet has to either be a handshake_fin packet or a sync_ack packet.
       switch (flag) {
          case flag::SYNC:
-            handle_sync();
+            queue_sync();
             break;
          case flag::MIDI:
             queue_midi_data();
@@ -378,6 +455,7 @@ void Client::twiddle() {
    get_current_time(&current_time);
    // Check to see if we need to ack any packets
    if (queued_acks.size() > 0 && queued_acks.front().first < current_time) {
+
       // Send the ack
       send_midi_ack(queued_acks.front().second);
    }
@@ -389,6 +467,14 @@ void Client::twiddle() {
 
       // Play the midi data
       play_midi_data();
+   }
+
+   get_current_time(&current_time);
+   // Check to see if we need to play any midi events
+   if (queued_syncs.size() > 0 && queued_syncs.front().first < current_time) {
+
+      // Play the midi data
+      send_sync_ack(queued_syncs.front().second);
    }
 }
 

@@ -10,7 +10,6 @@
 #include <unistd.h>           // gethostname
 #include <iostream>
 #include <string>
-#include <sstream>
 #include "network/network.hpp"
 #include "server/server.hpp"
 
@@ -46,11 +45,16 @@ void Server::append_to_buf(MyPmEvent *event) {
 }
 
 void Server::calc_delay(ClientInfo& client){
-   std::vector<long>::iterator it;
+   if (client.delay_times.size() > NUM_DELAY_SAMPLES) {
+      client.delay_times.pop_front();
+   }
+
+   std::deque<long>::iterator it;
    for (it = client.delay_times.begin(); it != client.delay_times.end(); it++) {
       client.avg_delay += *it;
    }
    client.avg_delay /= client.delay_times.size();
+   print_debug("client %d's delay: %lu\n", client.fd, client.avg_delay);
 }
 
 void Server::config_fd_set_for_normal_traffic() {
@@ -65,7 +69,7 @@ void Server::config_fd_set_for_normal_traffic() {
 
    // Remove the priority client from the fd_set if a priority client exists
    if (fd_to_client_info.size() > 0) {
-      FD_CLR(sync_it->first, &normal_fds);
+      FD_CLR(sync_client->fd, &normal_fds);
    }
 }
 
@@ -75,7 +79,7 @@ void Server::config_fd_set_for_priority_traffic() {
 
    // Add the current priority client to the fd_set
    if (fd_to_client_info.size() > 0) {
-      FD_SET(sync_it->first, &priority_fds);
+      FD_SET(sync_client->fd, &priority_fds);
    }
 }
 
@@ -177,20 +181,49 @@ void Server::handle_client_timing(ClientInfo& info) {
 
    // Divide the rtt to get the one sided delay (assuming the delays are equal
    // on the way to the client and the way back).
-   info.delay_times.push_back(rtt / 2);
+   //info.delay_times.push_back(rtt / 2);
+   info.session_delay += rtt / 2;
+   ++info.session_delay_counter;
 
    // If we have recv'd enough client sync messages to establish an avg. delay
    // for this client.
-   if (info.delay_times.size() >= NUM_SYNC_TRIALS) {
+   if (info.session_delay_counter >= NUM_SYNC_TRIALS) {
       print_debug("Done syncing with client %d\n", info.fd);
+
+      // Condense the temporary rtt average for this sync set to 1 avg value.
+      info.delay_times.push_back(info.session_delay / NUM_SYNC_TRIALS);
+      info.session_delay = 0;
+      info.session_delay_counter = 0;
+
       // Compute the average delay for this client
       calc_delay(info);
 
       // Move the sync_it to the next client and sync
       ++sync_it;
       if (sync_it == fd_to_client_info.end()) {
-         sync_it = fd_to_client_info.begin(); 
+         max_client_delay = 0;
+
+         // Update the max_client_delay to be the maximum delay amongst clients
+         // in the network.
+         for (sync_it = fd_to_client_info.begin();
+            sync_it != fd_to_client_info.end(); ++sync_it) {
+            if (sync_it->second.avg_delay > max_client_delay) {
+               max_client_delay = sync_it->second.avg_delay;
+            }
+         }
+         fprintf(stderr, "max_client_delay: %lu\n", max_client_delay);
+         print_debug("max_client_delay: %lu\n", max_client_delay);
+
+         // Reset the iterator to the front of the list
+         sync_it = fd_to_client_info.begin();
       }
+
+      // Get the next client to sync with from the sync_it. Note that we are
+      // doing this because of some problematic issues surrounding a client
+      // joining while the sync_it is running through the previous clients.
+      sync_client = &(sync_it->second);
+      fprintf(stderr, "updated sync_client to %d\n", sync_client->fd);
+      send_sync_packet(*sync_client);
    }
    // If we still need to do more sync trials to compute an avg. delay.
    else {
@@ -261,6 +294,8 @@ void Server::handle_new_client() {
    // Set the new client info's timing info to zero.
    info.avg_delay = 0;
    info.last_msg_send_time = 0;
+   info.session_delay = 0;
+   info.session_delay_counter = 0;
 
    // Build response packet to client
    memset(buf, '\0', MAX_BUF_SIZE);
@@ -280,6 +315,13 @@ void Server::handle_new_client() {
    // "starve" some of the clients if we were flooded with connections, but
    // we won't be and this should be fine.
    sync_it = fd_to_client_info.begin();
+
+   // If this is the first client then setup the sync_client to get the sync
+   // train rolling.
+   if (fd_to_client_info.size() == 1) {
+      sync_client = &(sync_it->second);
+      send_sync_packet(*sync_client);
+   }
 
    print_state();
 }
@@ -375,7 +417,7 @@ void Server::handle_play_song() {
                setup_midi_msg(client);
 
                // If any of the queues have events that need to be sent
-               while (track_deque->size() && event.timestamp <= midi_timer) {
+               while (track_deque->size() && (event.timestamp + (max_client_delay - client_it->second.avg_delay)) <= midi_timer) {
                   // Pull the midi message out of the PmEvent
                   memcpy(message, event.message, 3 * sizeof(uint8_t));
 
@@ -432,7 +474,6 @@ void Server::handle_priority_msg() {
          switch (flag) {
             case flag::HS_FIN:
                print_debug("Recv'd handshake_fin!\n");
-               send_sync_packet(*info);
                break;
             case flag::SYNC_ACK:
                print_debug("Recv'd sync_ack!\n");
@@ -673,7 +714,7 @@ int Server::send_midi_msg(ClientInfo *info) {
    // Store the seq_num to send time mapping for this message. Note that we are
    // storing the seq_num + 1 (which is the expected seq_num for the ack to this
    // message) in the map for easy lookup later.
-   info->packet_to_send_time[info->seq_num + 1] = current_time;
+   //info->packet_to_send_time[info->seq_num + 1] = current_time;
 
    // Fire off the packet
    int bytes_sent = send_buf(info->fd, &info->addr, buf, buf_offset);
@@ -690,9 +731,6 @@ int Server::send_midi_msg(ClientInfo *info) {
 
 void Server::send_sync_packet(ClientInfo& info) {
    int result;
-
-   // Clear out the delay_times vector so we start fresh
-   info.delay_times.clear();
 
    // Rebuild the packet to the client
    memset(buf, '\0', MAX_BUF_SIZE);
