@@ -18,32 +18,15 @@
 enum ParseArgs {MIDI_CHANNEL, DELAY, REMOTE_MACHINE, REMOTE_PORT};
 
 Client::Client(int num_args, char **arg_list) {
-   // Set client_alive to 1 to simulate an active client.
-   client_alive = 1;
-
-   // Set sequence number to 0 since we are just starting.
-   seq_num = 0;
-
-   // Initialize the timeout count to zero for connection attempts
-   timeout_count = 0;
-
-   // Put object into the HANDSHAKE state.
-   state = client::HANDSHAKE;
-
-   // Have the midi_header overlay the buf.
-   midi_header = (Packet_Header *)buf;
-
-   // Clear the midi_ack's unneeded fields to avoid printout confusion.
-   midi_ack.num_midi_events = 0;
-
-   // Clear buffer
-   memset(buf, '\0', MAX_BUF_SIZE);
 
    // Ensure that command line arguments are good.
    if (!parse_inputs(num_args, arg_list)) {
       print_usage();
       exit(1);
    }
+
+   // Initialize all variables needed by the client.
+   init()
 
    // Drop into the client state machine.
    ready_go();
@@ -198,6 +181,29 @@ void Client::handle_stdin() {
      }
    }
 
+}
+
+void Client::init() {
+  // Set client_alive to 1 to simulate an active client.
+  client_alive = 1;
+
+  // Set sequence number to 0 since we are just starting.
+  seq_num = 0;
+
+  // Initialize the timeout count to zero for connection attempts
+  timeout_count = 0;
+
+  // Put object into the HANDSHAKE state.
+  state = client::HANDSHAKE;
+
+  // Have the midi_header overlay the buf.
+  midi_header = (Packet_Header *)buf;
+
+  // Clear the midi_ack's unneeded fields to avoid printout confusion.
+  midi_ack.num_midi_events = 0;
+
+  // Clear buffer
+  memset(buf, '\0', MAX_BUF_SIZE);
 }
 
 void Client::queue_midi_data() {

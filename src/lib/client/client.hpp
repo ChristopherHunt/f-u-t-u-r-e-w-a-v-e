@@ -87,6 +87,9 @@ class Client {
       // Handle input from stdin
       void handle_stdin();
 
+      // Initialize all values needed by the client
+      void init();
+
       // Parses the midi data sent to the client from the server.
       void queue_midi_data();
 
