@@ -541,7 +541,7 @@ void Server::handle_sync_timeout(ClientInfo *info) {
          print_debug("client %d tracks.size(): %d\n", info->fd, info->tracks.size());
          min_client->tracks.push_back(*track_it);
       }
-      print_debug(stderr, "DONESKIS!\n");
+      print_debug("DONESKIS!\n");
    }
 
    // Increment sync_it and check delays of all clients as needed
