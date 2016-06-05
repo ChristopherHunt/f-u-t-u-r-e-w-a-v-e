@@ -200,6 +200,8 @@ void Server::handle_client_timing(ClientInfo& info) {
       // Compute the average delay for this client
       calc_delay(info);
 
+      // If the client comes back alive, remove its tracks from other
+      // clients that took over when it failed
       if (info.active == false){
         // for every track in client_to_track
         std::vector<int>::iterator it;
@@ -207,22 +209,14 @@ void Server::handle_client_timing(ClientInfo& info) {
         tracks = &(client_to_track[info.fd]);
         std::unordered_map<int, ClientInfo>::iterator client_it;
 
-        //vec.erase(std::remove(vec.begin(), vec.end(), 8), vec.end());
+        // The erase-remove idiom for the win
         for (it = tracks->begin(); it != tracks->end(); ++it) {
           // search all other clients, remove from list
           for (client_it = fd_to_client_info.begin(); client_it != fd_to_client_info.end(); ++client_it){
             client_it->second.tracks.erase(std::remove(client_it->second.tracks.begin(), client_it->second.tracks.end(), *it), client_it->second.tracks.end());
           }
         }
-
-
-        // tell all other people that have my tracks to drop them from their
-        // tracks list
-
       }
-
-      // if client is active,
-        // then pull back tracks back into client and remark the client as active
 
       // Increment sync_it and check delays of all clients as needed
       sync_next();
@@ -231,7 +225,7 @@ void Server::handle_client_timing(ClientInfo& info) {
       // doing this because of some problematic issues surrounding a client
       // joining while the sync_it is running through the previous clients.
       sync_client = &(sync_it->second);
-      fprintf(stderr, "updated sync_client to %d\n", sync_client->fd);
+      print_debug("updated sync_client to %d\n", sync_client->fd);
       send_sync_packet(*sync_client);
    }
    // If we still need to do more sync trials to compute an avg. delay.
@@ -251,11 +245,11 @@ void Server::handle_handshake() {
 }
 
 void Server::handle_new_client() {
-   fprintf(stderr, "Server::handle_new_client!\n");
+   print_debug("Server::handle_new_client!\n");
 
    int result;
    ClientInfo info;
-   fprintf(stderr, "Made empty client!\n");
+   print_debug("Made empty client!\n");
 
    // Recv message from client
    result = recv_buf(server_sock, &info.addr, buf, sizeof(Handshake_Packet));
@@ -304,9 +298,9 @@ void Server::handle_new_client() {
    ASSERT(result == sizeof(Packet_Header));
 
    // Add the clinet to the fd_to_client_info mapping
-   fprintf(stderr, "assigning client %d to fd_to_client_info\n", info.fd);
+   print_debug("assigning client %d to fd_to_client_info\n", info.fd);
    fd_to_client_info[info.fd] = info;
-   fprintf(stderr, "assigned client %d to fd_to_client_info\n", info.fd);
+   print_debug("assigned client %d to fd_to_client_info\n", info.fd);
 
    // So we need to reset the iterator now that the underlying container
    // changed and I realize that by shoving it back to the front it could
@@ -543,11 +537,11 @@ void Server::handle_sync_timeout(ClientInfo *info) {
 
          // Push the current track from the inactive client onto the client with
          // the minimum number of tracks.
-         fprintf(stderr, "assigning track %d to client %d\n", *track_it, min_client->fd);
-         fprintf(stderr, "client %d tracks.size(): %d\n", info->fd, info->tracks.size());
+         print_debug("assigning track %d to client %d\n", *track_it, min_client->fd);
+         print_debug("client %d tracks.size(): %d\n", info->fd, info->tracks.size());
          min_client->tracks.push_back(*track_it);
       }
-      fprintf(stderr, "DONESKIS!\n");
+      print_debug(stderr, "DONESKIS!\n");
    }
 
    // Increment sync_it and check delays of all clients as needed
@@ -605,9 +599,9 @@ void Server::handle_wait_for_input() {
       if (sync_client != NULL && sync_client->last_msg_send_time +
             MAX_SYNC_TIMEOUT * sync_client->avg_delay < current_time) {
 
-         fprintf(stderr, "current_time: %lu\n", current_time);
-         fprintf(stderr, "sync_client->last_msg_send_time: %lu\n", sync_client->last_msg_send_time);
-         fprintf(stderr, "sync_client->avg_delay: %lu\n", sync_client->avg_delay);
+         print_debug("current_time: %lu\n", current_time);
+         print_debug("sync_client->last_msg_send_time: %lu\n", sync_client->last_msg_send_time);
+         print_debug("sync_client->avg_delay: %lu\n", sync_client->avg_delay);
          handle_sync_timeout(sync_client);
       }
    }
