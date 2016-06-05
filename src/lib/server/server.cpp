@@ -10,7 +10,6 @@
 #include <unistd.h>           // gethostname
 #include <iostream>
 #include <string>
-#include <sstream>
 #include "network/network.hpp"
 #include "server/server.hpp"
 
@@ -209,7 +208,7 @@ void Server::handle_client_timing(ClientInfo& info) {
          for (sync_it = fd_to_client_info.begin();
             sync_it != fd_to_client_info.end(); ++sync_it) {
             if (sync_it->second.avg_delay > max_client_delay) {
-               max_client_delay = sync_it->second.avg_delay;   
+               max_client_delay = sync_it->second.avg_delay;
             }
          }
          fprintf(stderr, "max_client_delay: %lu\n", max_client_delay);
