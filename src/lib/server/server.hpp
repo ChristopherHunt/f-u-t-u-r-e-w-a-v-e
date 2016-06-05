@@ -16,57 +16,112 @@
 #include "portmidi/include/porttime.h"
 
 #define NUM_SYNC_TRIALS   3   // Number of times to sync with a client to
-                              // established an avg. delay profile.
+// established an avg. delay profile.
 
 #define MAX_SYNC_TIMEOUT  3   // The number of times the client tries to sync
-                              // with a client before declaring the client
-                              // inactive 
+// with a client before declaring the client
+// inactive 
 
 #define NUM_DELAY_SAMPLES 3   // Number of delay times each client keeps track
-                              // of when computing average delay.
+// of when computing average delay.
 
-typedef struct ClientInfo {
-   // Client's socket fd
-   int fd;
+class ClientInfo {
+   public:
+      // Client's socket fd
+      int fd;
 
-   // Tells the server if this client is currently active
-   bool active;
+      // Tells the server if this client is currently active
+      bool active;
 
-   // Client's socket address information
-   sockaddr_in addr;
+      // Client's socket address information
+      sockaddr_in addr;
 
-   // Current sequence number to send next for this client
-   uint32_t seq_num;
+      // Current sequence number to send next for this client
+      uint32_t seq_num;
 
-   // The expected next sequence number from the client
-   uint32_t expected_seq_num;
+      // The expected next sequence number from the client
+      uint32_t expected_seq_num;
 
-   // The average delay of this client (used for syncing with other clients)
-   long avg_delay;
+      // The average delay of this client (used for syncing with other clients)
+      long avg_delay;
 
-   // The time the last sync message was sent to the client
-   long last_msg_send_time;
+      // The time the last sync message was sent to the client
+      long last_msg_send_time;
 
-   // A temp variable to hold syncing values (which are averaged before putting
-   // them into the delay_times deque).
-   long session_delay;
+      // A temp variable to hold syncing values (which are averaged before putting
+      // them into the delay_times deque).
+      long session_delay;
 
-   // A counter to determine how many times to send sync packets per sync
-   // session.
-   int session_delay_counter;
+      // A counter to determine how many times to send sync packets per sync
+      // session.
+      int session_delay_counter;
 
-   // The number of successful syncs the client has had this go around.
-   int sync_counter;
+      // The number of successful syncs the client has had this go around.
+      int sync_counter;
 
-   // Container of sync times which can be averaged.
-   std::deque<long> delay_times;
+      // Container of sync times which can be averaged.
+      std::deque<long> delay_times;
 
-   // Tracks this client is responsible for playing (the server uses this to
-   // figure out who to send tracks to).
-   std::vector<int> tracks;
+      // Tracks this client is responsible for playing (the server uses this to
+      // figure out who to send tracks to).
+      std::vector<int> tracks;
 
-   //std::unordered_map<uint32_t, long> packet_to_send_time;
-} ClientInfo;
+      //std::unordered_map<uint32_t, long> packet_to_send_time;
+
+      ClientInfo() {}
+
+      ~ClientInfo() {}
+
+      ClientInfo(const ClientInfo& other) {
+         fd = other.fd;
+         active = other.active;
+         addr.sin_family = other.addr.sin_family;
+         addr.sin_port = other.addr.sin_port;
+         addr.sin_addr = other.addr.sin_addr;
+         seq_num = other.seq_num;
+         expected_seq_num = other.expected_seq_num;
+         avg_delay = other.avg_delay;
+         last_msg_send_time = other.last_msg_send_time;
+         session_delay = other.session_delay;
+         session_delay_counter = other.session_delay_counter;
+         sync_counter = other.sync_counter;
+         std::deque<long>::const_iterator delay_it;
+         for (delay_it = other.delay_times.begin();
+               delay_it != other.delay_times.end(); ++delay_it) {
+            delay_times.push_back(*delay_it);
+         }
+         std::vector<int>::const_iterator tracks_it;
+         for (tracks_it = other.tracks.begin();
+               tracks_it != other.tracks.end(); ++tracks_it) {
+            tracks.push_back(*tracks_it);
+         }
+      }
+
+      ClientInfo& operator=(ClientInfo other) {
+         fd = other.fd;
+         active = other.active;
+         addr.sin_family = other.addr.sin_family;
+         addr.sin_port = other.addr.sin_port;
+         addr.sin_addr = other.addr.sin_addr;
+         seq_num = other.seq_num;
+         expected_seq_num = other.expected_seq_num;
+         avg_delay = other.avg_delay;
+         last_msg_send_time = other.last_msg_send_time;
+         session_delay = other.session_delay;
+         session_delay_counter = other.session_delay_counter;
+         sync_counter = other.sync_counter;
+         std::deque<long>::iterator delay_it;
+         for (delay_it = other.delay_times.begin();
+               delay_it != other.delay_times.end(); ++delay_it) {
+            delay_times.push_back(*delay_it);
+         }
+         std::vector<int>::iterator tracks_it;
+         for (tracks_it = other.tracks.begin();
+               tracks_it != other.tracks.end(); ++tracks_it) {
+            tracks.push_back(*tracks_it);
+         }
+      }
+};
 
 namespace server {
    enum State { HANDSHAKE, WAIT_FOR_INPUT, PARSE_SONG, PLAY_SONG, SONG_FIN, DONE };
@@ -223,6 +278,10 @@ class Server {
 
       // Sets the timeval struct tv to have timeout number of seconds.
       void set_timeval(uint32_t timeout);
+
+      // Move the sync_it to the next viable client and compute the overall
+      // max delay amongst clients if needed.
+      void sync_next();
 
       // Waits 10 seconds for a handshake packet to come in. If one does
       // arrive, the packet is parsed and the state of the file transfer

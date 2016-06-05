@@ -194,29 +194,13 @@ void Server::handle_client_timing(ClientInfo& info) {
       info.delay_times.push_back(info.session_delay / info.sync_counter);
       info.session_delay = 0;
       info.session_delay_counter = 0;
+      info.sync_counter = 0;
 
       // Compute the average delay for this client
       calc_delay(info);
 
-      // Move the sync_it to the next client and sync
-      ++sync_it;
-      if (sync_it == fd_to_client_info.end()) {
-         max_client_delay = 0;
-
-         // Update the max_client_delay to be the maximum delay amongst clients
-         // in the network.
-         for (sync_it = fd_to_client_info.begin();
-            sync_it != fd_to_client_info.end(); ++sync_it) {
-            if (sync_it->second.avg_delay > max_client_delay) {
-               max_client_delay = sync_it->second.avg_delay;
-            }
-         }
-         fprintf(stderr, "max_client_delay: %lu\n", max_client_delay);
-         print_debug("max_client_delay: %lu\n", max_client_delay);
-
-         // Reset the iterator to the front of the list
-         sync_it = fd_to_client_info.begin();
-      }
+      // Increment sync_it and check delays of all clients as needed
+      sync_next();
 
       // Get the next client to sync with from the sync_it. Note that we are
       // doing this because of some problematic issues surrounding a client
@@ -246,6 +230,7 @@ void Server::handle_new_client() {
 
    int result;
    ClientInfo info;
+   fprintf(stderr, "Made empty client!\n");
 
    // Recv message from client
    result = recv_buf(server_sock, &info.addr, buf, sizeof(Handshake_Packet));
@@ -257,25 +242,6 @@ void Server::handle_new_client() {
 
    // Make sure the packet flag is a handshake
    ASSERT(flag == flag::HS);
-
-   // FIXME: This doesn't work because each client will be assigned a unique
-   // port to communicate with the server on. So you would need to have the
-   // client send some unique id in order to know who is who.
-   /*
-      std::deque<ClientInfo *>::iterator it;
-      for (it = priority_messages.begin(); it != priority_messages.end(); ++it) {
-   // If the client already has a stale entry in the priority message queue,
-   // drop that stale entry.
-   if ((*it)->addr.sin_family == info.addr.sin_family &&
-   (*it)->addr.sin_port == info.addr.sin_port) {
-   // Close the fd associated with this stale connection
-   close((*it)->fd);
-
-   // Remove the stale connection from the priority message queue
-   priority_messages.erase(it);
-   }
-   }
-   */
 
    // Create a new socket to service this new client
    info.fd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -292,8 +258,9 @@ void Server::handle_new_client() {
    info.expected_seq_num = info.seq_num + 1;
 
    // Set the new client info's timing info to zero.
-   info.avg_delay = 0;
-   info.last_msg_send_time = 0;
+   get_current_time(&current_time);
+   info.last_msg_send_time = current_time;
+   info.avg_delay = 1000;
    info.session_delay = 0;
    info.session_delay_counter = 0;
    info.sync_counter = 0;
@@ -312,7 +279,9 @@ void Server::handle_new_client() {
    ASSERT(result == sizeof(Packet_Header));
 
    // Add the clinet to the fd_to_client_info mapping
+   fprintf(stderr, "assigning client %d to fd_to_client_info\n", info.fd);
    fd_to_client_info[info.fd] = info;
+   fprintf(stderr, "assigned client %d to fd_to_client_info\n", info.fd);
 
    // So we need to reset the iterator now that the underlying container
    // changed and I realize that by shoving it back to the front it could
@@ -398,49 +367,53 @@ void Server::handle_play_song() {
    for (client_it = fd_to_client_info.begin(); client_it != fd_to_client_info.end();
          ++client_it) {
 
-      // Loop through all of the tracks that this client is assigned
-      for (track_it = client_it->second.tracks.begin();
-            track_it != client_it->second.tracks.end(); ++track_it) {
+      // Only send tracks to active clients
+      if (client_it->second.active == true) {
 
-         // Get the deque that corresponds to the track
-         track_deque = &(track_queues[*track_it]);
+         // Loop through all of the tracks that this client is assigned
+         for (track_it = client_it->second.tracks.begin();
+               track_it != client_it->second.tracks.end(); ++track_it) {
 
-         if (track_deque->size()) {
-            song_is_playing = true;
+            // Get the deque that corresponds to the track
+            track_deque = &(track_queues[*track_it]);
 
-            // Get the next event
-            event = track_deque->front();
+            if (track_deque->size()) {
+               song_is_playing = true;
 
-            // Setup the buffer to send a midi message if its time to send.
-            //std::cout << "\tMidi Timer: " << midi_timer << std::endl;
-            // fprintf(stderr, "value midi_timer: %d\n", midi_timer);
-            if (event.timestamp <= midi_timer) {
+               // Get the next event
+               event = track_deque->front();
 
-               // Get the current client
-               client = &(client_it->second);
-               setup_midi_msg(client);
+               // Setup the buffer to send a midi message if its time to send.
+               //std::cout << "\tMidi Timer: " << midi_timer << std::endl;
+               // fprintf(stderr, "value midi_timer: %d\n", midi_timer);
+               if (event.timestamp <= midi_timer) {
 
-               // If any of the queues have events that need to be sent
-               while (track_deque->size() && (event.timestamp + (max_client_delay - client_it->second.avg_delay)) <= midi_timer) {
-                  // Pull the midi message out of the PmEvent
-                  memcpy(message, event.message, 3 * sizeof(uint8_t));
+                  // Get the current client
+                  client = &(client_it->second);
+                  setup_midi_msg(client);
 
-                  // Add this event to the buffered midi message
-                  append_to_buf(&event);
+                  // If any of the queues have events that need to be sent
+                  while (track_deque->size() && (event.timestamp + (max_client_delay - client_it->second.avg_delay)) <= midi_timer) {
+                     // Pull the midi message out of the PmEvent
+                     memcpy(message, event.message, 3 * sizeof(uint8_t));
 
-                  // TODO -- this is for testing the notes locally
-                  //play_music_locally(buf, (buf_offset - SIZEOF_MIDI_EVENT));
-                  //
+                     // Add this event to the buffered midi message
+                     append_to_buf(&event);
 
-                  // Remove the first event from the queue
-                  track_deque->pop_front();
+                     // TODO -- this is for testing the notes locally
+                     //play_music_locally(buf, (buf_offset - SIZEOF_MIDI_EVENT));
+                     //
 
-                  // Get a reference to the new front event of the queue.
-                  event = track_deque->front();
+                     // Remove the first event from the queue
+                     track_deque->pop_front();
+
+                     // Get a reference to the new front event of the queue.
+                     event = track_deque->front();
+                  }
+
+                  // Send the midi message to the client
+                  send_midi_msg(client);
                }
-
-               // Send the midi message to the client
-               send_midi_msg(client);
             }
          }
       }
@@ -508,7 +481,8 @@ void Server::handle_sync_timeout(ClientInfo *info) {
    ++info->session_delay_counter;
 
    // Check to see if this client has timed out fully
-   if (info->session_delay_counter >= NUM_SYNC_TRIALS) {
+   if (info->session_delay_counter >= NUM_SYNC_TRIALS && info->active) {
+      fprintf(stderr, "SETTING CLIENT %d to INACTIVE!\n", info->fd);
       // Mark the client as inactive
       info->active = false;
 
@@ -524,15 +498,18 @@ void Server::handle_sync_timeout(ClientInfo *info) {
 
       // Redistribute the client's tracks to other active clients
       for (track_it = info->tracks.begin(); track_it != info->tracks.end();
-         ++track_it) {
+            ++track_it) {
 
          // Reset to large number per iteration
          min_client_tracks = 1000;
 
          // Find the client with the least number of tracks 
          for (client_it = fd_to_client_info.begin();
-            client_it != fd_to_client_info.end(); ++client_it) {
-            if (client_it->second.tracks.size() < min_client_tracks) {
+               client_it != fd_to_client_info.end(); ++client_it) {
+            // Only look at clients that are active
+            if (client_it->second.active == true && 
+                  client_it->second.tracks.size() < min_client_tracks) {
+
                min_client_tracks = client_it->second.tracks.size();
                min_client = &(client_it->second);
             }
@@ -540,9 +517,15 @@ void Server::handle_sync_timeout(ClientInfo *info) {
 
          // Push the current track from the inactive client onto the client with
          // the minimum number of tracks.
+         fprintf(stderr, "assigning track %d to client %d\n", *track_it, min_client->fd);
+         fprintf(stderr, "client %d tracks.size(): %d\n", info->fd, info->tracks.size());
          min_client->tracks.push_back(*track_it);
       }
+      fprintf(stderr, "DONESKIS!\n");
    }
+
+   // Increment sync_it and check delays of all clients as needed
+   sync_next();
 }
 
 void Server::handle_stdin() {
@@ -590,6 +573,18 @@ void Server::handle_wait_for_input() {
    if (num_connections_available) {
       handle_priority_msg();
    }
+   else {
+      // Check the timeout on the current syncing client and act apprioriately
+      get_current_time(&current_time);
+      if (sync_client != NULL && sync_client->last_msg_send_time +
+            MAX_SYNC_TIMEOUT * sync_client->avg_delay < current_time) {
+
+         fprintf(stderr, "current_time: %lu\n", current_time);
+         fprintf(stderr, "sync_client->last_msg_send_time: %lu\n", sync_client->last_msg_send_time);
+         fprintf(stderr, "sync_client->avg_delay: %lu\n", sync_client->avg_delay);
+         handle_sync_timeout(sync_client);
+      }
+   }
 
    // Select on the normal client sockets to see if they are saying anything
    config_fd_set_for_normal_traffic();
@@ -603,13 +598,6 @@ void Server::handle_wait_for_input() {
    // notes to the clients.
    if (song_is_playing) {
       state = server::PLAY_SONG;
-   }
-
-   // Check the timeout on the current syncing client and act apprioriately
-   get_current_time(&current_time);
-   if (sync_client != NULL && sync_client->last_msg_send_time +
-      MAX_SYNC_TIMEOUT * sync_client->avg_delay < current_time) {
-      handle_sync_timeout(sync_client);
    }
 }
 
@@ -845,6 +833,28 @@ void Server::setup_udp_socket() {
 void Server::set_timeval(uint32_t timeout) {
    tv.tv_sec = timeout;
    tv.tv_usec = 0;
+}
+
+void Server::sync_next() {
+   // Move the sync_it to the next client and sync
+   ++sync_it;
+   if (sync_it == fd_to_client_info.end()) {
+      max_client_delay = 0;
+
+      // Update the max_client_delay to be the maximum delay amongst clients
+      // in the network.
+      for (sync_it = fd_to_client_info.begin();
+            sync_it != fd_to_client_info.end(); ++sync_it) {
+         if (sync_it->second.avg_delay > max_client_delay) {
+            max_client_delay = sync_it->second.avg_delay;
+         }
+      }
+      fprintf(stderr, "max_client_delay: %lu\n", max_client_delay);
+      print_debug("max_client_delay: %lu\n", max_client_delay);
+
+      // Reset the iterator to the front of the list
+      sync_it = fd_to_client_info.begin();
+   }
 }
 
 void process_midi(PtTimestamp timestamp, void *userData) {
