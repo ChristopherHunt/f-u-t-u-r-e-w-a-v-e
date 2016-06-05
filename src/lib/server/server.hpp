@@ -18,7 +18,7 @@
 #define NUM_SYNC_TRIALS 3     // Number of times to sync with a client to
                               // established an avg. delay profile.
 
-#define NUM_DELAY_SAMPLES 50  // Number of delay times each client keeps track
+#define NUM_DELAY_SAMPLES 3  // Number of delay times each client keeps track
                               // of when computing average delay.
 
 typedef struct ClientInfo {
