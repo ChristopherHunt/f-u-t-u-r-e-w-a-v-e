@@ -27,7 +27,7 @@ Client::Client(int num_args, char **arg_list) {
 
    // clear all the queues
    clear_queues();
-   
+
    // Initialize all variables needed by the client.
    init();
 
@@ -53,36 +53,36 @@ void Client::config_fd_set_for_stdin() {
 }
 
 int Client::connection_ready(uint32_t timeout) {
-    set_timeval(timeout);
+   set_timeval(timeout);
 
-    //int num_fds_available = selectMod(server_sock + 1, &rdfds, NULL, NULL, &tv);
-    int num_fds_available = select(server_sock + 1, &rdfds, NULL, NULL, &tv);
-    ASSERT(num_fds_available >= 0);
+   //int num_fds_available = selectMod(server_sock + 1, &rdfds, NULL, NULL, &tv);
+   int num_fds_available = select(server_sock + 1, &rdfds, NULL, NULL, &tv);
+   ASSERT(num_fds_available >= 0);
 
-    return num_fds_available;
+   return num_fds_available;
 }
 
 int Client::check_for_response(uint32_t timeout) {
-    int num_fds_available;
-    int handle_data = 1;
+   int num_fds_available;
+   int handle_data = 1;
 
-    // Select on stdin to see if the user wants to do something
-    config_fd_set_for_stdin();
-    num_fds_available = connection_ready(0);
-    ASSERT(num_fds_available >= 0);
-    if (num_fds_available) {
-       print_debug("handling stdin input!\n");
-       handle_stdin();
-       handle_data = 0;
-       num_fds_available = 0;
-    }
+   // Select on stdin to see if the user wants to do something
+   config_fd_set_for_stdin();
+   num_fds_available = connection_ready(0);
+   ASSERT(num_fds_available >= 0);
+   if (num_fds_available) {
+      print_debug("handling stdin input!\n");
+      handle_stdin();
+      handle_data = 0;
+      num_fds_available = 0;
+   }
 
-    if (handle_data) {
+   if (handle_data) {
       // Select on fdS to see if there is midi data
-       config_fd_set();
-       num_fds_available = connection_ready(timeout);
-       ASSERT(num_fds_available >= 0);
-    }
+      config_fd_set();
+      num_fds_available = connection_ready(timeout);
+      ASSERT(num_fds_available >= 0);
+   }
 
    return num_fds_available;
 }
@@ -175,43 +175,52 @@ void Client::handle_stdin() {
    char *endptr;
 
    if (token.compare("start") == 0) {
-     fprintf(stderr, "restarting the client\n");
-     client_alive = 1;
+      fprintf(stderr, "restarting the client\n");
+      client_alive = 1;
+      get_current_time(&timing_checkpoint);
    } else if (token.compare("stop") == 0) {
-     fprintf(stderr, "killing the client\n");
-     client_alive = 0;
-     clear_queues();
-   } else {
-     int temp_delay = strtol(token.c_str(), &endptr, 10);
-     if (temp_delay > -1) {
-       delay = temp_delay;
-       fprintf(stderr, "changing latency to %d\n", delay);
-     }
+      fprintf(stderr, "killing the client\n");
+      client_alive = 0;
+      clear_queues();
+      get_current_time(&timing_checkpoint);
+   } 
+   else if (token.compare("time") == 0) {
+      long temp;
+      get_current_time(&temp);
+      fprintf(stderr, "elapsed time: %lu ms\n", temp - timing_checkpoint);
+   }
+   else {
+      int temp_delay = strtol(token.c_str(), &endptr, 10);
+      if (temp_delay > -1) {
+         delay = temp_delay;
+         fprintf(stderr, "changing latency to %d\n", delay);
+         get_current_time(&timing_checkpoint);
+      }
    }
 
 }
 
 void Client::init() {
-  // Set client_alive to 1 to simulate an active client.
-  client_alive = 1;
+   // Set client_alive to 1 to simulate an active client.
+   client_alive = 1;
 
-  // Set sequence number to 0 since we are just starting.
-  seq_num = 0;
+   // Set sequence number to 0 since we are just starting.
+   seq_num = 0;
 
-  // Initialize the timeout count to zero for connection attempts
-  timeout_count = 0;
+   // Initialize the timeout count to zero for connection attempts
+   timeout_count = 0;
 
-  // Put object into the HANDSHAKE state.
-  state = client::HANDSHAKE;
+   // Put object into the HANDSHAKE state.
+   state = client::HANDSHAKE;
 
-  // Have the midi_header overlay the buf.
-  midi_header = (Packet_Header *)buf;
+   // Have the midi_header overlay the buf.
+   midi_header = (Packet_Header *)buf;
 
-  // Clear the midi_ack's unneeded fields to avoid printout confusion.
-  midi_ack.num_midi_events = 0;
+   // Clear the midi_ack's unneeded fields to avoid printout confusion.
+   midi_ack.num_midi_events = 0;
 
-  // Clear buffer
-  memset(buf, '\0', MAX_BUF_SIZE);
+   // Clear buffer
+   memset(buf, '\0', MAX_BUF_SIZE);
 }
 
 void Client::queue_midi_data() {
@@ -443,14 +452,14 @@ void Client::twiddle() {
    }
 
    /*
-   fprintf(stderr, "current_time: %lu\n", current_time);
-   if (queued_acks.size() > 0) {
+      fprintf(stderr, "current_time: %lu\n", current_time);
+      if (queued_acks.size() > 0) {
       fprintf(stderr, "queued_acks.front().first: %lu\n", queued_acks.front().first);
-   }
-   if (queued_events.size() > 0) {
+      }
+      if (queued_events.size() > 0) {
       fprintf(stderr, "queued_events.front().first: %lu\n", queued_events.front().first);
-   }
-   */
+      }
+      */
 
    get_current_time(&current_time);
    // Check to see if we need to ack any packets

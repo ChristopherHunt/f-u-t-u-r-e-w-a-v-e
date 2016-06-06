@@ -38,6 +38,7 @@ class Client {
 
       long delay;                   // Simulated network delay
       long current_time;            // A variable to hold the current time.
+      long timing_checkpoint;       // Used for timing keyboard events.
       int midi_channel;             // Target midi channel to play out of
       int client_alive;             // For simulating a dead client
 
