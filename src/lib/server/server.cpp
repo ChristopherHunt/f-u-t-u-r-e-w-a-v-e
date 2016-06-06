@@ -926,7 +926,7 @@ void Server::sync_next() {
          }
       }
       get_current_time(&current_time);
-      fprintf(stderr, "%lu\n", current_time);
+      fprintf(stderr, "%lu, %lu\n", current_time, max_client_delay);
       // fprintf(stderr, "max_client_delay: %lu\n", max_client_delay);
       print_debug("max_client_delay: %lu\n", max_client_delay);
 
