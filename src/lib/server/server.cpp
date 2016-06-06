@@ -341,19 +341,19 @@ void Server::handle_new_client() {
 void Server::handle_normal_msg() {
    print_debug("Server::handle_normal_msg!\n");
    ClientInfo *info;
-   for (int i = STDERR + 1; i <= max_sock + 1; ++i) {
-      if (FD_ISSET(i, &normal_fds)) {
-         // Pull out the client's info
-         info = &(fd_to_client_info[i]);
-
-         // Receive the message into the buffer
-         int bytes_recv = recv_buf(i, &info->addr, buf, MAX_BUF_SIZE);
-         ASSERT(bytes_recv > 0);
-
-         // Handle its contents
-         handle_client_packet(i);
-      }
-   }
+  //  for (int i = STDERR + 1; i <= max_sock + 1; ++i) {
+  //     if (FD_ISSET(i, &normal_fds)) {
+  //        // Pull out the client's info
+  //        info = &(fd_to_client_info[i]);
+   //
+  //        // Receive the message into the buffer
+  //        int bytes_recv = recv_buf(i, &info->addr, buf, MAX_BUF_SIZE);
+  //        ASSERT(bytes_recv > 0);
+   //
+  //        // Handle its contents
+  //        handle_client_packet(i);
+  //     }
+  //  }
 }
 
 void Server::handle_parse_song() {
