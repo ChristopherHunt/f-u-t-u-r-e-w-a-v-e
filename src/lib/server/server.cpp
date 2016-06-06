@@ -228,14 +228,14 @@ void Server::handle_client_timing(ClientInfo& info) {
                client_it != fd_to_client_info.end(); ++client_it) {
             for (it = client_it->second.tracks.begin();
                   it != client_it->second.tracks.end(); ++it) {
-               fprintf(stderr, "client %d: track: %d\n", client_it->second.fd,
+              //  fprintf(stderr, "client %d: track: %d\n", client_it->second.fd,
                      *it);
             }
          }
          //
 
          // Set the client to active again
-         fprintf(stderr, "marking client %d active: %d\n", info.fd, info.active);
+        //  fprintf(stderr, "marking client %d active: %d\n", info.fd, info.active);
          info.active = true;
       }
 
@@ -530,7 +530,7 @@ void Server::handle_sync_timeout(ClientInfo *info) {
       info->sync_counter = 0;
 
       if (info->active) {
-         fprintf(stderr, "SETTING CLIENT %d to INACTIVE!\n", info->fd);
+        //  fprintf(stderr, "SETTING CLIENT %d to INACTIVE!\n", info->fd);
          // Mark the client as inactive
          info->active = false;
 
@@ -625,10 +625,10 @@ void Server::handle_wait_for_input() {
       if (sync_client != NULL && sync_client->last_msg_send_time +
             MAX_SYNC_TIMEOUT * sync_client->avg_delay < current_time) {
 
-         fprintf(stderr, "current_time: %lu\n", current_time);
-         fprintf(stderr, "sync_client %d last_msg_send_time: %lu\n", sync_client->fd, sync_client->last_msg_send_time);
-         fprintf(stderr, "sync_client %d avg_delay: %lu\n", sync_client->fd, sync_client->avg_delay);
-         fprintf(stderr, "sync_cilent %d active: %d\n", sync_client->fd, sync_client->active);
+        //  fprintf(stderr, "current_time: %lu\n", current_time);
+        //  fprintf(stderr, "sync_client %d last_msg_send_time: %lu\n", sync_client->fd, sync_client->last_msg_send_time);
+        //  fprintf(stderr, "sync_client %d avg_delay: %lu\n", sync_client->fd, sync_client->avg_delay);
+        //  fprintf(stderr, "sync_cilent %d active: %d\n", sync_client->fd, sync_client->active);
          handle_sync_timeout(sync_client);
       }
    }
@@ -899,7 +899,9 @@ void Server::sync_next() {
             max_client_delay = sync_it->second.avg_delay;
          }
       }
-      fprintf(stderr, "max_client_delay: %lu\n", max_client_delay);
+      get_current_time(&current_time);
+      fprintf(stderr, "%lu\n", current_time);
+      // fprintf(stderr, "max_client_delay: %lu\n", max_client_delay);
       print_debug("max_client_delay: %lu\n", max_client_delay);
 
       // Reset the iterator to the front of the list
@@ -907,7 +909,7 @@ void Server::sync_next() {
    }
 
    sync_client = &(sync_it->second);
-   fprintf(stderr, "sync_client: %d\n", sync_client->fd);
+  //  fprintf(stderr, "sync_client: %d\n", sync_client->fd);
 }
 
 void process_midi(PtTimestamp timestamp, void *userData) {
