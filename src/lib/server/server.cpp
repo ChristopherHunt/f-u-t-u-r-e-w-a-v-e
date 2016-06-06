@@ -229,7 +229,7 @@ void Server::handle_client_timing(ClientInfo& info) {
             for (it = client_it->second.tracks.begin();
                   it != client_it->second.tracks.end(); ++it) {
               //  fprintf(stderr, "client %d: track: %d\n", client_it->second.fd,
-                     *it);
+                    //  *it);
             }
          }
          //
@@ -608,7 +608,7 @@ void Server::handle_wait_for_input() {
    num_connections_available = connection_ready(normal_fds);
    ASSERT(num_connections_available >= 0);
    if (num_connections_available) {
-      fprintf(stderr, "new client!\n");
+      // fprintf(stderr, "new client!\n");
       handle_new_client();
    }
 
