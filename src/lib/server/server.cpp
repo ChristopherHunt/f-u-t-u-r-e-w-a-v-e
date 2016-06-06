@@ -228,14 +228,14 @@ void Server::handle_client_timing(ClientInfo& info) {
                client_it != fd_to_client_info.end(); ++client_it) {
             for (it = client_it->second.tracks.begin();
                   it != client_it->second.tracks.end(); ++it) {
-               //  fprintf(stderr, "client %d: track: %d\n", client_it->second.fd,
-               //  *it);
+              //  fprintf(stderr, "client %d: track: %d\n", client_it->second.fd,
+                    //  *it);
             }
          }
          //
 
          // Set the client to active again
-         //  fprintf(stderr, "marking client %d active: %d\n", info.fd, info.active);
+        //  fprintf(stderr, "marking client %d active: %d\n", info.fd, info.active);
          info.active = true;
       }
 
@@ -246,13 +246,11 @@ void Server::handle_client_timing(ClientInfo& info) {
       // doing this because of some problematic issues surrounding a client
       // joining while the sync_it is running through the previous clients.
       print_debug("updated sync_client to %d\n", sync_client->fd);
-      queue_sync_packet(*sync_client);
-      //send_sync_packet(*sync_client);
+      send_sync_packet(*sync_client);
    }
    // If we still need to do more sync trials to compute an avg. delay.
    else {
-      queue_sync_packet(info);
-      //send_sync_packet(info);
+      send_sync_packet(info);
    }
 }
 
@@ -334,8 +332,7 @@ void Server::handle_new_client() {
    // train rolling.
    if (fd_to_client_info.size() == 1) {
       sync_client = &(sync_it->second);
-      queue_sync_packet(*sync_client);
-      //send_sync_packet(*sync_client);
+      send_sync_packet(*sync_client);
    }
 
    print_state();
@@ -344,19 +341,19 @@ void Server::handle_new_client() {
 void Server::handle_normal_msg() {
    print_debug("Server::handle_normal_msg!\n");
    ClientInfo *info;
-  //  for (int i = STDERR + 1; i <= max_sock + 1; ++i) {
-  //     if (FD_ISSET(i, &normal_fds)) {
-  //        // Pull out the client's info
-  //        info = &(fd_to_client_info[i]);
-   //
-  //        // Receive the message into the buffer
-  //        int bytes_recv = recv_buf(i, &info->addr, buf, MAX_BUF_SIZE);
-  //        ASSERT(bytes_recv > 0);
-   //
-  //        // Handle its contents
-  //        handle_client_packet(i);
-  //     }
-  //  }
+   for (int i = STDERR + 1; i <= max_sock + 1; ++i) {
+      if (FD_ISSET(i, &normal_fds)) {
+         // Pull out the client's info
+         info = &(fd_to_client_info[i]);
+
+         // Receive the message into the buffer
+         int bytes_recv = recv_buf(i, &info->addr, buf, MAX_BUF_SIZE);
+         ASSERT(bytes_recv > 0);
+
+         // Handle its contents
+         handle_client_packet(i);
+      }
+   }
 }
 
 void Server::handle_parse_song() {
@@ -411,7 +408,7 @@ void Server::handle_play_song() {
 
       // Only send tracks to active clients
       print_debug("handle_play_song::client %d active %d\n",
-            client_it->second.fd, client_it->second.active);
+         client_it->second.fd, client_it->second.active);
       if (client_it->second.active == true) {
 
          // Loop through all of the tracks that this client is assigned
@@ -522,7 +519,6 @@ void Server::handle_song_fin() {
 }
 
 void Server::handle_sync_timeout(ClientInfo *info) {
-   fprintf(stderr, "Server::handle_sync_timeout!\n");
    // Increment the number of times we've tried to sync with this client
    ++info->session_delay_counter;
 
@@ -534,7 +530,7 @@ void Server::handle_sync_timeout(ClientInfo *info) {
       info->sync_counter = 0;
 
       if (info->active) {
-         //  fprintf(stderr, "SETTING CLIENT %d to INACTIVE!\n", info->fd);
+        //  fprintf(stderr, "SETTING CLIENT %d to INACTIVE!\n", info->fd);
          // Mark the client as inactive
          info->active = false;
 
@@ -575,8 +571,7 @@ void Server::handle_sync_timeout(ClientInfo *info) {
       sync_next();
    }
    // Send a new sync packet
-   queue_sync_packet(*sync_client);
-   //send_sync_packet(*sync_client);
+   send_sync_packet(*sync_client);
 }
 
 void Server::handle_stdin() {
@@ -627,13 +622,13 @@ void Server::handle_wait_for_input() {
    else {
       // Check the timeout on the current syncing client and act apprioriately
       get_current_time(&current_time);
-      if (sync_client != NULL && sync_client->last_msg_send_time + SYNC_DELAY_MS + 
+      if (sync_client != NULL && sync_client->last_msg_send_time +
             MAX_SYNC_TIMEOUT * sync_client->avg_delay < current_time) {
 
-         //fprintf(stderr, "current_time: %lu\n", current_time);
-         //fprintf(stderr, "sync_client %d last_msg_send_time: %lu\n", sync_client->fd, sync_client->last_msg_send_time);
-         //fprintf(stderr, "sync_client %d avg_delay: %lu\n", sync_client->fd, sync_client->avg_delay);
-         //fprintf(stderr, "sync_cilent %d active: %d\n", sync_client->fd, sync_client->active);
+        //  fprintf(stderr, "current_time: %lu\n", current_time);
+        //  fprintf(stderr, "sync_client %d last_msg_send_time: %lu\n", sync_client->fd, sync_client->last_msg_send_time);
+        //  fprintf(stderr, "sync_client %d avg_delay: %lu\n", sync_client->fd, sync_client->avg_delay);
+        //  fprintf(stderr, "sync_cilent %d active: %d\n", sync_client->fd, sync_client->active);
          handle_sync_timeout(sync_client);
       }
    }
@@ -644,20 +639,6 @@ void Server::handle_wait_for_input() {
    ASSERT(num_connections_available >= 0);
    if (num_connections_available) {
       handle_normal_msg();
-   }
-
-   get_current_time(&current_time);
-   if (queued_sync_packets.size() > 0 &&
-         queued_sync_packets.front().first < current_time) {
-      fprintf(stderr, "queued_sync_packets.size: %d\n", queued_sync_packets.size());
-      fprintf(stderr, "queued_sync_packets.front().first: %lu\n", queued_sync_packets.front().first);
-
-      // Send the next sync packet to its destination
-      send_sync_packet(*(queued_sync_packets.front().second));
-
-      // Pop it off the front of the queue
-      queued_sync_packets.pop_front();
-      fprintf(stderr, "queued_sync_packets.size after pop: %d\n", queued_sync_packets.size());
    }
 
    // If the song is playing, fall into the play_song function to send more
@@ -843,14 +824,7 @@ int Server::send_midi_msg(ClientInfo *info) {
    return bytes_sent;
 }
 
-void Server::queue_sync_packet(ClientInfo& info) {
-   fprintf(stderr, "queue_sync_packet called!\n");
-   get_current_time(&current_time);
-   queued_sync_packets.push_back(std::make_pair(current_time + SYNC_DELAY_MS, &info));
-}
-
 void Server::send_sync_packet(ClientInfo& info) {
-   fprintf(stderr, "sending sync packet to client %d\n", info.fd);
    int result;
 
    // Rebuild the packet to the client
@@ -935,7 +909,7 @@ void Server::sync_next() {
    }
 
    sync_client = &(sync_it->second);
-   //  fprintf(stderr, "sync_client: %d\n", sync_client->fd);
+  //  fprintf(stderr, "sync_client: %d\n", sync_client->fd);
 }
 
 void process_midi(PtTimestamp timestamp, void *userData) {
