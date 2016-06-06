@@ -16,14 +16,16 @@
 #include "portmidi/include/porttime.h"
 
 #define NUM_SYNC_TRIALS   3   // Number of times to sync with a client to
-// established an avg. delay profile.
+                              // established an avg. delay profile.
 
 #define MAX_SYNC_TIMEOUT  3   // The number of times the client tries to sync
-// with a client before declaring the client
-// inactive
+                              // with a client before declaring the client
+                              // inactive
 
 #define NUM_DELAY_SAMPLES 3   // Number of delay times each client keeps track
-// of when computing average delay.
+                              // of when computing average delay.
+
+#define SYNC_DELAY_MS    1000 // The delay to wait before sending a sync packet.
 
 class ClientInfo {
    public:
@@ -172,6 +174,9 @@ class Server {
       // client crashes.
       std::unordered_map<int, std::vector<int> > client_to_track;
 
+      // A queue of packets to send after SYNC_DELAY_MS time.
+      std::deque<std::pair<long, ClientInfo *> > queued_sync_packets;
+
       // Appends the event to the buffer, incrementing the number of midi
       // messages in the buffer's midi_header.
       void append_to_buf(MyPmEvent *event);
@@ -262,6 +267,9 @@ class Server {
       // Prints the usage message specifying the input arguments to the Server
       // constructor.
       void print_usage();
+
+      // Queues a sync packet in to dispatch later based on SYNC_DELAY_MS.
+      void queue_sync_packet(ClientInfo& info);
 
       // The main state machine loop for the server.
       void ready_go();
