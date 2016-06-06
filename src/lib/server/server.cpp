@@ -203,19 +203,40 @@ void Server::handle_client_timing(ClientInfo& info) {
       // If the client comes back alive, remove its tracks from other
       // clients that took over when it failed
       if (info.active == false){
-        // for every track in client_to_track
-        std::vector<int>::iterator it;
-        std::vector<int> * tracks;
-        tracks = &(client_to_track[info.fd]);
-        std::unordered_map<int, ClientInfo>::iterator client_it;
+         // for every track in client_to_track
+         std::vector<int>::iterator it;
+         std::vector<int> * tracks;
+         tracks = &(client_to_track[info.fd]);
+         std::unordered_map<int, ClientInfo>::iterator client_it;
 
-        // The erase-remove idiom for the win
-        for (it = tracks->begin(); it != tracks->end(); ++it) {
-          // search all other clients, remove from list
-          for (client_it = fd_to_client_info.begin(); client_it != fd_to_client_info.end(); ++client_it){
-            client_it->second.tracks.erase(std::remove(client_it->second.tracks.begin(), client_it->second.tracks.end(), *it), client_it->second.tracks.end());
-          }
-        }
+         // The erase-remove idiom for the win
+         for (it = tracks->begin(); it != tracks->end(); ++it) {
+            // Search all other clients, remove from list
+            for (client_it = fd_to_client_info.begin();
+                  client_it != fd_to_client_info.end(); ++client_it) {
+               // Ensure we don't remove the tracks from the returning client
+               if (client_it->second.fd != info.fd) {
+                  client_it->second.tracks.erase(std::remove(
+                           client_it->second.tracks.begin(), client_it->second.tracks.end(),
+                           *it), client_it->second.tracks.end());
+               }
+            }
+         }
+
+         // TODO: REMOVE
+         for (client_it = fd_to_client_info.begin();
+               client_it != fd_to_client_info.end(); ++client_it) {
+            for (it = client_it->second.tracks.begin();
+                  it != client_it->second.tracks.end(); ++it) {
+               fprintf(stderr, "client %d: track: %d\n", client_it->second.fd,
+                     *it);
+            }
+         }
+         //
+
+         // Set the client to active again
+         fprintf(stderr, "marking client %d active: %d\n", info.fd, info.active);
+         info.active = true;
       }
 
       // Increment sync_it and check delays of all clients as needed
@@ -224,7 +245,6 @@ void Server::handle_client_timing(ClientInfo& info) {
       // Get the next client to sync with from the sync_it. Note that we are
       // doing this because of some problematic issues surrounding a client
       // joining while the sync_it is running through the previous clients.
-      sync_client = &(sync_it->second);
       print_debug("updated sync_client to %d\n", sync_client->fd);
       send_sync_packet(*sync_client);
    }
@@ -371,7 +391,6 @@ void Server::handle_parse_song() {
 }
 
 void Server::handle_play_song() {
-  //  fprintf(stderr, "handle_play_song\n");
    MyPmEvent event;
    MyPmMessage message;
 
@@ -388,6 +407,8 @@ void Server::handle_play_song() {
          ++client_it) {
 
       // Only send tracks to active clients
+      print_debug("handle_play_song::client %d active %d\n",
+         client_it->second.fd, client_it->second.active);
       if (client_it->second.active == true) {
 
          // Loop through all of the tracks that this client is assigned
@@ -413,7 +434,8 @@ void Server::handle_play_song() {
                   setup_midi_msg(client);
 
                   // If any of the queues have events that need to be sent
-                  while (track_deque->size() && (event.timestamp + (max_client_delay - client_it->second.avg_delay)) <= midi_timer) {
+                  while (track_deque->size() && (event.timestamp +
+                           (max_client_delay - client_it->second.avg_delay)) <= midi_timer) {
                      // Pull the midi message out of the PmEvent
                      memcpy(message, event.message, 3 * sizeof(uint8_t));
 
@@ -501,51 +523,55 @@ void Server::handle_sync_timeout(ClientInfo *info) {
    ++info->session_delay_counter;
 
    // Check to see if this client has timed out fully
-   if (info->session_delay_counter >= NUM_SYNC_TRIALS && info->active) {
-      fprintf(stderr, "SETTING CLIENT %d to INACTIVE!\n", info->fd);
-      // Mark the client as inactive
-      info->active = false;
-
+   if (info->session_delay_counter >= NUM_SYNC_TRIALS) {
       // Zero the client's sync bookkeeping
       info->session_delay = 0;
       info->session_delay_counter = 0;
       info->sync_counter = 0;
 
-      ClientInfo *min_client;
-      int min_client_tracks;
-      std::vector<int>::iterator track_it;
-      std::unordered_map<int, ClientInfo>::iterator client_it;
+      if (info->active) {
+         fprintf(stderr, "SETTING CLIENT %d to INACTIVE!\n", info->fd);
+         // Mark the client as inactive
+         info->active = false;
 
-      // Redistribute the client's tracks to other active clients
-      for (track_it = info->tracks.begin(); track_it != info->tracks.end();
-            ++track_it) {
+         ClientInfo *min_client;
+         int min_client_tracks;
+         std::vector<int>::iterator track_it;
+         std::unordered_map<int, ClientInfo>::iterator client_it;
 
-         // Reset to large number per iteration
-         min_client_tracks = 1000;
+         // Redistribute the client's tracks to other active clients
+         for (track_it = info->tracks.begin(); track_it != info->tracks.end();
+               ++track_it) {
 
-         // Find the client with the least number of tracks
-         for (client_it = fd_to_client_info.begin();
-               client_it != fd_to_client_info.end(); ++client_it) {
-            // Only look at clients that are active
-            if (client_it->second.active == true &&
-                  client_it->second.tracks.size() < min_client_tracks) {
+            // Reset to large number per iteration
+            min_client_tracks = 1000;
 
-               min_client_tracks = client_it->second.tracks.size();
-               min_client = &(client_it->second);
+            // Find the client with the least number of tracks
+            for (client_it = fd_to_client_info.begin();
+                  client_it != fd_to_client_info.end(); ++client_it) {
+               // Only look at clients that are active
+               if (client_it->second.active == true &&
+                     client_it->second.tracks.size() < min_client_tracks) {
+
+                  min_client_tracks = client_it->second.tracks.size();
+                  min_client = &(client_it->second);
+               }
             }
+
+            // Push the current track from the inactive client onto the client with
+            // the minimum number of tracks.
+            print_debug("assigning track %d to client %d\n", *track_it, min_client->fd);
+            print_debug("client %d tracks.size(): %d\n", info->fd, info->tracks.size());
+            min_client->tracks.push_back(*track_it);
          }
-
-         // Push the current track from the inactive client onto the client with
-         // the minimum number of tracks.
-         print_debug("assigning track %d to client %d\n", *track_it, min_client->fd);
-         print_debug("client %d tracks.size(): %d\n", info->fd, info->tracks.size());
-         min_client->tracks.push_back(*track_it);
+         print_debug("DONESKIS!\n");
       }
-      print_debug("DONESKIS!\n");
-   }
 
-   // Increment sync_it and check delays of all clients as needed
-   sync_next();
+      // Increment sync_it and check delays of all clients as needed
+      sync_next();
+   }
+   // Send a new sync packet
+   send_sync_packet(*sync_client);
 }
 
 void Server::handle_stdin() {
@@ -599,9 +625,10 @@ void Server::handle_wait_for_input() {
       if (sync_client != NULL && sync_client->last_msg_send_time +
             MAX_SYNC_TIMEOUT * sync_client->avg_delay < current_time) {
 
-         print_debug("current_time: %lu\n", current_time);
-         print_debug("sync_client->last_msg_send_time: %lu\n", sync_client->last_msg_send_time);
-         print_debug("sync_client->avg_delay: %lu\n", sync_client->avg_delay);
+         fprintf(stderr, "current_time: %lu\n", current_time);
+         fprintf(stderr, "sync_client %d last_msg_send_time: %lu\n", sync_client->fd, sync_client->last_msg_send_time);
+         fprintf(stderr, "sync_client %d avg_delay: %lu\n", sync_client->fd, sync_client->avg_delay);
+         fprintf(stderr, "sync_cilent %d active: %d\n", sync_client->fd, sync_client->active);
          handle_sync_timeout(sync_client);
       }
    }
@@ -878,6 +905,9 @@ void Server::sync_next() {
       // Reset the iterator to the front of the list
       sync_it = fd_to_client_info.begin();
    }
+
+   sync_client = &(sync_it->second);
+   fprintf(stderr, "sync_client: %d\n", sync_client->fd);
 }
 
 void process_midi(PtTimestamp timestamp, void *userData) {

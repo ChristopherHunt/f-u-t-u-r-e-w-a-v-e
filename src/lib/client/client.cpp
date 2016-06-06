@@ -275,7 +275,7 @@ void Client::send_sync_ack(uint32_t packet_seq_num) {
    midi_header->seq_num = packet_seq_num;
    midi_header->flag = flag::SYNC_ACK;
 
-   print_debug("responding with seq_num: %d\n", midi_header->seq_num);
+   fprintf(stderr, "responding to sync_ack with seq_num: %d\n", midi_header->seq_num);
 
    // Send the handshake fin packet to the server.
    uint16_t packet_size = sizeof(Packet_Header);
