@@ -18,7 +18,7 @@
 #define NUM_SYNC_TRIALS   3   // Number of times to sync with a client to
                               // established an avg. delay profile.
 
-#define MAX_SYNC_TIMEOUT  3   // The number of times the client tries to sync
+#define MAX_SYNC_TIMEOUT  10   // The number of times the client tries to sync
                               // with a client before declaring the client
                               // inactive
 
