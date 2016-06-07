@@ -57,7 +57,7 @@ def format_data(data):
     for i in range(len(data['time'])):
         data['time'][i] = data['time'][i] - first_time
     print(data)
-    return
+    return data
 
 def plot_data(data, filename='whatever.pdf'):
     title = 'Convergence for Client 1: {}ms Client 2: {}ms with {} Sync Messages'
@@ -66,25 +66,54 @@ def plot_data(data, filename='whatever.pdf'):
     axes.set_xlim(left = -3000)
     pyplot.xlabel('Time (ms)')
     pyplot.ylabel('Max Client Delay (ms)')
-    pyplot.savefig(filename, bbox_inches='tight');
+    pyplot.savefig(data.figname, bbox_inches='tight');
     pyplot.close()
     return
 
+color_vals = ['purple', 'orange', 'red', green, 'blue', 'black', 'magenta', 'red']
+suffix = '.png'
 def main():
     arg_parser = get_arg_parser(description)
-    arg_parser.add_argument('-f','--filename', metavar='<filename>', help='CSV file with datas')
+    #arg_parser.add_argument('-f','--filename', metavar='<filename>', help='CSV file with datas')
+    arg_parser.add_argument('filename', nargs='+')
     args = arg_parser.parse_args()
-    data = None
-    delay1, delay2, syncs = parse_filename(args.filename)
-    with open(args.filename, 'r') as file:
-        data = parse_csv(file)
-    format_data(data)
-    figname = os.path.splitext(args.filename)[0] + '.png'
-    data.delay1 = delay1
-    data.delay2 = delay2
-    data.syncs = syncs
-    plot_data(data, figname)
-    print(figname)
+    datas = []
+    title = 'Convergence for Client 1: {}ms Client 2: {}ms Against Sync Messages'
+    this_delay2 = None
+    this_type = None
+    pyplot.xlabel('Time (ms)')
+    pyplot.ylabel('Max Client Delay (ms)')
+    for f,c in zip(args.filename, color_vals):
+        print('PARSING {}...'.format(f))
+        type = os.path.split(f)[0]
+        delay1, delay2, syncs = parse_filename(f)
+        if this_delay2 is None:
+            this_delay2 = delay2
+            this_type = type
+            pyplot.title(title.format(delay1, delay2))
+        else:
+            assert delay2 == this_delay2
+            if type not in this_type:
+                this_type.append(type)
+        with open(f, 'r') as file:
+            data = parse_csv(file)
+        data = format_data(data)
+        data.delay1 = delay1
+        data.delay2 = delay2
+        data.syncs = syncs
+        data.figname = os.path.splitext(f)[0] + suffix
+        datas.append(data)
+        #axes = data.plot(x='time', y='max client delay', kind='scatter', c=c, title=title)
+        pyplot.plot(data['time'], data['max client delay'], '-o', c=c, label='{}-{}'.format(type,syncs))
+    legend = pyplot.legend(loc=9, bbox_to_anchor=(0.5, -0.1), title='Sync Messages', ncol=len(args.filename))
+    axes = pyplot.gca()
+    axes.set_xlim(left = -3000)
+    pyplot.xlabel('Time (ms)')
+    pyplot.ylabel('Max Client Delay (ms)')
+    pyplot.savefig('{}_{}{}'.format(this_type,this_delay2, suffix), bbox_inches='tight');
+    pyplot.close()
+    for d in datas:
+        plot_data(data)
     return 0
 
 if __name__ == '__main__':
