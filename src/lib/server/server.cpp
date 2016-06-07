@@ -341,19 +341,19 @@ void Server::handle_new_client() {
 void Server::handle_normal_msg() {
    print_debug("Server::handle_normal_msg!\n");
    ClientInfo *info;
-   for (int i = STDERR + 1; i <= max_sock + 1; ++i) {
-      if (FD_ISSET(i, &normal_fds)) {
-         // Pull out the client's info
-         info = &(fd_to_client_info[i]);
-
-         // Receive the message into the buffer
-         int bytes_recv = recv_buf(i, &info->addr, buf, MAX_BUF_SIZE);
-         ASSERT(bytes_recv > 0);
-
-         // Handle its contents
-         handle_client_packet(i);
-      }
-   }
+  //  for (int i = STDERR + 1; i <= max_sock + 1; ++i) {
+  //     if (FD_ISSET(i, &normal_fds)) {
+  //        // Pull out the client's info
+  //        info = &(fd_to_client_info[i]);
+   //
+  //        // Receive the message into the buffer
+  //        int bytes_recv = recv_buf(i, &info->addr, buf, MAX_BUF_SIZE);
+  //        ASSERT(bytes_recv > 0);
+   //
+  //        // Handle its contents
+  //        handle_client_packet(i);
+  //     }
+  //  }
 }
 
 void Server::handle_parse_song() {
@@ -534,7 +534,7 @@ void Server::handle_sync_timeout(ClientInfo *info) {
          // Mark the client as inactive
          info->active = false;
 
-         ClientInfo *min_client;
+         ClientInfo *min_client = NULL;
          int min_client_tracks;
          std::vector<int>::iterator track_it;
          std::unordered_map<int, ClientInfo>::iterator client_it;
@@ -560,9 +560,11 @@ void Server::handle_sync_timeout(ClientInfo *info) {
 
             // Push the current track from the inactive client onto the client with
             // the minimum number of tracks.
-            print_debug("assigning track %d to client %d\n", *track_it, min_client->fd);
-            print_debug("client %d tracks.size(): %d\n", info->fd, info->tracks.size());
-            min_client->tracks.push_back(*track_it);
+            if (min_client != NULL) {
+              print_debug("assigning track %d to client %d\n", *track_it, min_client->fd);
+              print_debug("client %d tracks.size(): %d\n", info->fd, info->tracks.size());
+              min_client->tracks.push_back(*track_it);
+            }
          }
          print_debug("DONESKIS!\n");
       }
@@ -895,7 +897,8 @@ void Server::sync_next() {
       // in the network.
       for (sync_it = fd_to_client_info.begin();
             sync_it != fd_to_client_info.end(); ++sync_it) {
-         if (sync_it->second.avg_delay > max_client_delay) {
+         if (sync_it->second.avg_delay > max_client_delay &&
+              sync_it->second.active) {
             max_client_delay = sync_it->second.avg_delay;
          }
       }
