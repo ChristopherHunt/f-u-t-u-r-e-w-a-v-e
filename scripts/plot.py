@@ -110,7 +110,7 @@ def main():
     axes.set_xlim(left = -3000)
     pyplot.xlabel('Time (ms)')
     pyplot.ylabel('Max Client Delay (ms)')
-    pyplot.savefig('{}_{}{}'.format(this_type,this_delay2, suffix), bbox_inches='tight');
+    pyplot.savefig('{}_{}{}'.format('_'.join(this_type),this_delay2, suffix), bbox_inches='tight');
     pyplot.close()
     for d in datas:
         plot_data(data)
