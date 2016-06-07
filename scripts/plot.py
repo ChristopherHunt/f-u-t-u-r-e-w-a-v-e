@@ -60,8 +60,8 @@ def format_data(data):
     return data
 
 def plot_data(data, filename='whatever.pdf'):
-    title = 'Convergence for Client 1: {}ms Client 2: {}ms with {} Sync Messages'
-    title = title.format(data.delay1, data.delay2, data.syncs)
+    title = '{} Convergence for Client 1: {}ms Client 2: {}ms with {} Sync Messages'
+    title = title.format(data.type, data.delay1, data.delay2, data.syncs)
     axes = data.plot(x='time', y='max client delay', kind='scatter', c=green, title=title)
     axes.set_xlim(left = -3000)
     pyplot.xlabel('Time (ms)')
@@ -80,7 +80,7 @@ def main():
     datas = []
     title = 'Convergence for Client 1: {}ms Client 2: {}ms Against Sync Messages'
     this_delay2 = None
-    this_type = None
+    this_type = []
     pyplot.xlabel('Time (ms)')
     pyplot.ylabel('Max Client Delay (ms)')
     for f,c in zip(args.filename, color_vals):
@@ -89,7 +89,7 @@ def main():
         delay1, delay2, syncs = parse_filename(f)
         if this_delay2 is None:
             this_delay2 = delay2
-            this_type = type
+            this_type.append(type)
             pyplot.title(title.format(delay1, delay2))
         else:
             assert delay2 == this_delay2
@@ -98,6 +98,7 @@ def main():
         with open(f, 'r') as file:
             data = parse_csv(file)
         data = format_data(data)
+        data.type = type
         data.delay1 = delay1
         data.delay2 = delay2
         data.syncs = syncs
