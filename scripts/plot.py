@@ -61,7 +61,7 @@ def format_data(data):
 
 def plot_data(data, filename='whatever.pdf'):
     title = '{} Convergence for Client 1: {}ms Client 2: {}ms with {} Sync Messages'
-    title = title.format(data.type, data.delay1, data.delay2, data.syncs)
+    title = title.format(data.type, data.delay1, data.delay2, data.syncs).replace('_','-')
     axes = data.plot(x='time', y='max client delay', kind='scatter', c=green, title=title)
     axes.set_xlim(left = -3000)
     pyplot.xlabel('Time (ms)')
@@ -90,7 +90,7 @@ def main():
         if this_delay2 is None:
             this_delay2 = delay2
             this_type.append(type)
-            pyplot.title(title.format(delay1, delay2))
+            pyplot.title(title.format(delay1, delay2).replace('_','-'))
         else:
             assert delay2 == this_delay2
             if type not in this_type:
@@ -105,7 +105,7 @@ def main():
         data.figname = os.path.splitext(f)[0] + suffix
         datas.append(data)
         #axes = data.plot(x='time', y='max client delay', kind='scatter', c=c, title=title)
-        pyplot.plot(data['time'], data['max client delay'], '-o', c=c, label='{}-{}'.format(type,syncs))
+        pyplot.plot(data['time'], data['max client delay'], '-o', c=c, label='{}-{}'.format(type,syncs).replace('_','-'))
     legend = pyplot.legend(loc=9, bbox_to_anchor=(0.5, -0.1), title='Sync Messages', ncol=len(args.filename))
     axes = pyplot.gca()
     axes.set_xlim(left = -3000)
