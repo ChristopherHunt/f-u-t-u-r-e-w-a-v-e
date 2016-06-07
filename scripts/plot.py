@@ -79,7 +79,7 @@ def main():
     with open(args.filename, 'r') as file:
         data = parse_csv(file)
     format_data(data)
-    figname = os.path.splitext(args.filename)[0] + '.pdf'
+    figname = os.path.splitext(args.filename)[0] + '.png'
     data.delay1 = delay1
     data.delay2 = delay2
     data.syncs = syncs
