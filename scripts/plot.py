@@ -42,7 +42,6 @@ def parse_csv(file):
     new_csv = pandas.read_csv(file)
     return new_csv
 
-
 def main():
     arg_parser = get_arg_parser(description)
     arg_parser.add_argument('-f','--filename', metavar='<filename>', help='CSV file with datas')
