@@ -284,7 +284,9 @@ void Client::send_sync_ack(uint32_t packet_seq_num) {
    midi_header->seq_num = packet_seq_num;
    midi_header->flag = flag::SYNC_ACK;
 
-   fprintf(stderr, "responding to sync_ack with seq_num: %d\n", midi_header->seq_num);
+   get_current_time(&current_time);
+   fprintf(stderr, "responding to sync_ack -- time since event: %lu ms\n",
+      current_time - timing_checkpoint);    
 
    // Send the handshake fin packet to the server.
    uint16_t packet_size = sizeof(Packet_Header);
