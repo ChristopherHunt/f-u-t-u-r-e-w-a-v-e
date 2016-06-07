@@ -44,3 +44,6 @@ log
 .*.swp
 *.swp
 *~
+
+# MIDI test files
+*.m
